@@ -22,7 +22,7 @@ def window(
     no_poses: FakePoseSource,
 ) -> VideoWindow:
     install_capture(working_capture)
-    return VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), no_poses)
+    return VideoWindow(Camera(CameraConfig(source=0)).__enter__(), no_poses)
 
 
 def test_window_adopts_the_title_and_the_frame_size(window: VideoWindow) -> None:
@@ -43,7 +43,7 @@ def test_a_frame_the_camera_never_delivered_is_not_sent_to_the_model(
     application: QApplication, install_capture: InstallCapture, no_poses: FakePoseSource
 ) -> None:
     install_capture(FakeCapture(frames=[], opened=True, fps=25.0))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), no_poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), no_poses)
 
     window._show_next_frame()
 
@@ -59,7 +59,7 @@ def test_the_title_reports_how_many_people_were_detected(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource(tuple(make_person(0.8) for _ in range(people)))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
 
@@ -152,7 +152,7 @@ def test_a_device_that_stops_delivering_closes_the_window(
 ) -> None:
     capture = FakeCapture(frames=[], opened=True, fps=25.0)
     install_capture(capture)
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), FakePoseSource(()))
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), FakePoseSource(()))
     window.show()
     window.start()
 
@@ -167,7 +167,7 @@ def test_the_frame_shown_in_the_window_carries_the_drawn_skeleton(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource((make_person(0.8),))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
 
@@ -179,7 +179,7 @@ def test_the_model_never_sees_a_frame_we_have_drawn_on(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource((make_person(0.8),))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
     window._show_next_frame()
@@ -213,7 +213,7 @@ def test_faces_are_hidden_before_the_skeleton_is_drawn(
     monkeypatch.setattr("evidone_pose_detection.ui.window.blur_faces", record_blur)
     monkeypatch.setattr("evidone_pose_detection.ui.window.draw_poses", record_draw)
     window = VideoWindow(
-        Camera(CameraConfig(device_index=0)).__enter__(), RecordingPoses((make_person(0.8),))
+        Camera(CameraConfig(source=0)).__enter__(), RecordingPoses((make_person(0.8),))
     )
 
     window._show_next_frame()
@@ -226,7 +226,7 @@ def test_the_skeleton_stays_sharp_on_top_of_a_blurred_face(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource((make_person(0.8),))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
 

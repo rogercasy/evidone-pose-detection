@@ -27,6 +27,8 @@ class FakeCapture:
         self._fps = fps
         self.released = 0
         self.delivered: list[Frame] = []
+        self.rewinds = 0
+        self._original = list(frames)
 
     def isOpened(self) -> bool:
         return self._opened
@@ -48,6 +50,12 @@ class FakeCapture:
         frame = captured.copy()
         self.delivered.append(frame)
         return True, frame
+
+    def set(self, prop: int, value: float) -> bool:
+        if prop == cv2.CAP_PROP_POS_FRAMES and value == 0:
+            self.rewinds += 1
+            self._frames = list(self._original)
+        return True
 
     def release(self) -> None:
         self.released += 1

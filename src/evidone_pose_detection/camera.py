@@ -29,19 +29,20 @@ class Camera:
         self.release()
 
     def open(self) -> None:
+        source = self._config.source
         try:
-            capture = cv2.VideoCapture(self._config.device_index)
+            capture = cv2.VideoCapture(source if isinstance(source, int) else str(source))
         except Exception as error:
-            raise CameraOpenError(self._config.device_index) from error
+            raise CameraOpenError(source) from error
 
         if not capture.isOpened():
             capture.release()
-            raise CameraOpenError(self._config.device_index)
+            raise CameraOpenError(source)
         self._capture = capture
-        logger.info("Opened camera device %d", self._config.device_index)
+        logger.info("Opened capture source %s", source)
 
     def properties(self) -> CaptureProperties:
-        capture = self._opened_capture()
+        capture = self._open_capture()
         fps = capture.get(cv2.CAP_PROP_FPS)
         return CaptureProperties(
             width=round(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
@@ -50,7 +51,19 @@ class Camera:
         )
 
     def read(self) -> Frame | None:
-        read, frame = self._opened_capture().read()
+        capture = self._open_capture()
+        read, frame = capture.read()
+        if read:
+            return frame
+        if not self._config.is_file:
+            return None
+        return self._replay(capture)
+
+    def _replay(self, capture: cv2.VideoCapture) -> Frame | None:
+        # A clip that ran out starts again; a clip that yields nothing twice is finished.
+        logger.debug("Rewinding %s", self._config.source)
+        capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        read, frame = capture.read()
         return frame if read else None
 
     def release(self) -> None:
@@ -58,9 +71,9 @@ class Camera:
             return
         self._capture.release()
         self._capture = None
-        logger.info("Released camera device %d", self._config.device_index)
+        logger.info("Released capture source %s", self._config.source)
 
-    def _opened_capture(self) -> cv2.VideoCapture:
+    def _open_capture(self) -> cv2.VideoCapture:
         if self._capture is None:
             raise CameraNotOpenError
         return self._capture

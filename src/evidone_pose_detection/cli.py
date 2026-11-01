@@ -28,7 +28,7 @@ def parse_config(argv: Sequence[str]) -> AppConfig:
     )
     arguments = parser.parse_args(argv)
     return AppConfig(
-        camera=CameraConfig(device_index=arguments.camera),
+        camera=CameraConfig(source=arguments.camera),
         pose=PoseConfig(weights=DEFAULT_WEIGHTS, confidence=arguments.confidence),
     )
 

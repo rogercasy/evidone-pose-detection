@@ -29,10 +29,9 @@ class FakeApplication:
         return self._exit_code
 
 
-def config_for(device_index: int) -> AppConfig:
+def config_for(source: int) -> AppConfig:
     return AppConfig(
-        camera=CameraConfig(device_index=device_index),
-        pose=PoseConfig(weights=WEIGHTS, confidence=0.4),
+        camera=CameraConfig(source=source), pose=PoseConfig(weights=WEIGHTS, confidence=0.4)
     )
 
 
@@ -188,7 +187,7 @@ def test_run_builds_the_window_once_both_are_in_hand(
     built_applications: list[FakeApplication],
 ) -> None:
     install_capture(working_capture)
-    camera = Camera(CameraConfig(device_index=0))
+    camera = Camera(CameraConfig(source=0))
     camera.open()
 
     assert run(camera, FakePoseSource(())) == 0
