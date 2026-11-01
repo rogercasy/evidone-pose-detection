@@ -211,15 +211,15 @@ def test_faces_are_hidden_before_the_skeleton_is_drawn(
             order.append("estimate")
             return super().estimate(frame)
 
-    def record_blur(frame: Frame, people: Sequence[PersonPose]) -> Frame:
-        order.append("blur")
+    def record_hide(frame: Frame, regions: Sequence[object], style: object) -> Frame:
+        order.append("hide")
         return frame
 
     def record_draw(frame: Frame, people: Sequence[PersonPose]) -> Frame:
         order.append("draw")
         return frame
 
-    monkeypatch.setattr("evidone_pose_detection.ui.window.blur_faces", record_blur)
+    monkeypatch.setattr("evidone_pose_detection.ui.window.hide_faces", record_hide)
     monkeypatch.setattr("evidone_pose_detection.ui.window.draw_poses", record_draw)
     window = VideoWindow(
         Camera(CameraConfig(source=0)).__enter__(), RecordingPoses((make_person(0.8),))
@@ -227,7 +227,7 @@ def test_faces_are_hidden_before_the_skeleton_is_drawn(
 
     window._show_next_frame()
 
-    assert order == ["estimate", "blur", "draw"]
+    assert order == ["estimate", "hide", "draw"]
 
 
 def test_the_skeleton_stays_sharp_on_top_of_a_blurred_face(

@@ -1,21 +1,28 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from math import ceil, floor
+from types import MappingProxyType
 
 import cv2
 import numpy as np
 
-from evidone_pose_detection.models import FaceRegion, Frame
+from evidone_pose_detection.models import FaceRegion, Frame, HideStyle
+from evidone_pose_detection.vision.styles import blurred, filled, pixelated
 
-FACE_SAMPLE_GRID = 6
+type Conceal = Callable[[Frame], Frame]
+
+STYLES: Mapping[HideStyle, Conceal] = MappingProxyType(
+    {HideStyle.BLUR: blurred, HideStyle.PIXELATE: pixelated, HideStyle.FILL: filled}
+)
 
 
-def blur_faces(frame: Frame, regions: Sequence[FaceRegion]) -> Frame:
+def hide_faces(frame: Frame, regions: Sequence[FaceRegion], style: HideStyle) -> Frame:
+    conceal = STYLES[style]
     for region in regions:
-        _hide(frame, region)
+        _hide(frame, region, conceal)
     return frame
 
 
-def _hide(frame: Frame, region: FaceRegion) -> None:
+def _hide(frame: Frame, region: FaceRegion, conceal: Conceal) -> None:
     bounds = _clipped_bounds(frame, region)
     if bounds is None:
         return
@@ -30,7 +37,7 @@ def _hide(frame: Frame, region: FaceRegion) -> None:
         255,
         cv2.FILLED,
     )
-    patch[mask > 0] = _blurred(patch)[mask > 0]
+    patch[mask > 0] = conceal(patch)[mask > 0]
 
 
 def _clipped_bounds(frame: Frame, region: FaceRegion) -> tuple[int, int, int, int] | None:
@@ -42,10 +49,3 @@ def _clipped_bounds(frame: Frame, region: FaceRegion) -> tuple[int, int, int, in
     if right <= left or bottom <= top:
         return None
     return left, top, right, bottom
-
-
-def _blurred(patch: Frame) -> Frame:
-    height, width = patch.shape[:2]
-    reduced = cv2.resize(patch, (FACE_SAMPLE_GRID, FACE_SAMPLE_GRID), interpolation=cv2.INTER_AREA)
-    # Cubic, not linear: a linear upscale leaves visible facet edges between samples.
-    return cv2.resize(reduced, (width, height), interpolation=cv2.INTER_CUBIC)

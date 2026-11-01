@@ -40,6 +40,15 @@ KEYPOINT_COUNT = len(COCOKeypoint)
 VISIBILITY_THRESHOLD = 0.5
 
 
+class HideStyle(StrEnum):
+    BLUR = "blur"
+    PIXELATE = "pixelate"
+    FILL = "fill"
+
+
+DEFAULT_HIDE_STYLE = HideStyle.BLUR
+
+
 class BodyRegion(StrEnum):
     HEAD = "head"
     TORSO = "torso"

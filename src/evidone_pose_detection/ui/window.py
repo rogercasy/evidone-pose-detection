@@ -19,6 +19,7 @@ from evidone_pose_detection.camera import Camera, CaptureSession
 from evidone_pose_detection.errors import CameraOpenError
 from evidone_pose_detection.models import (
     DEFAULT_CAMERA_INDEX,
+    DEFAULT_HIDE_STYLE,
     CameraConfig,
     Frame,
     FrameStats,
@@ -28,10 +29,10 @@ from evidone_pose_detection.models import (
 from evidone_pose_detection.ui.framerate import FrameRate
 from evidone_pose_detection.vision import (
     FaceTracker,
-    blur_faces,
     draw_poses,
     draw_stats,
     face_regions,
+    hide_faces,
 )
 from evidone_pose_detection.vision.tracking import DEFAULT_HOLD_FRAMES
 
@@ -65,6 +66,7 @@ class VideoWindow(QMainWindow):
         self._frame_rate = FrameRate(FRAME_RATE_WINDOW)
         self._camera_index = _starting_camera_index(camera.config)
         self._tracker = FaceTracker(hold_frames=DEFAULT_HOLD_FRAMES)
+        self._hide_style = DEFAULT_HIDE_STYLE
         self._replays = camera.replays
         self._view = _build_view()
         self._interval_ms = properties.frame_interval_ms
@@ -106,7 +108,7 @@ class VideoWindow(QMainWindow):
         self._forget_tracks_across_a_replay()
         result = self._poses.estimate(frame)
         self._show_people(result.people)
-        blur_faces(frame, self._tracker.track(face_regions(result.people)))
+        hide_faces(frame, self._tracker.track(face_regions(result.people)), self._hide_style)
         draw_poses(frame, result.people)
         draw_stats(
             frame,
