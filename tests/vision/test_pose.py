@@ -25,10 +25,14 @@ class FakeKeypoints:
         self.conf = conf
 
 
+SPEED = {"preprocess": 1.25, "inference": 18.5, "postprocess": 0.75}
+
+
 class FakeResult:
     def __init__(self, boxes: Any, keypoints: Any) -> None:
         self.boxes = boxes
         self.keypoints = keypoints
+        self.speed = dict(SPEED)
 
 
 class FakeYOLO:
@@ -103,7 +107,7 @@ def test_a_detection_becomes_our_dataclasses(
 ) -> None:
     model.results = [result_for(people=1, keypoints=KEYPOINT_COUNT)]
 
-    (person,) = estimator.estimate(frame)
+    (person,) = estimator.estimate(frame).people
 
     assert (person.box.left, person.box.top) == (10.0, 20.0)
     assert (person.box.right, person.box.bottom) == (110.0, 220.0)
@@ -120,7 +124,7 @@ def test_every_detected_person_is_converted(
 ) -> None:
     model.results = [result_for(people=people, keypoints=KEYPOINT_COUNT)]
 
-    assert len(estimator.estimate(frame)) == people
+    assert len(estimator.estimate(frame).people) == people
 
 
 @pytest.mark.parametrize(
@@ -136,7 +140,7 @@ def test_a_result_without_detections_yields_nothing(
 ) -> None:
     model.results = [result]
 
-    assert estimator.estimate(frame) == ()
+    assert estimator.estimate(frame).people == ()
 
 
 def test_missing_keypoint_scores_default_to_zero(
@@ -146,7 +150,7 @@ def test_missing_keypoint_scores_default_to_zero(
     result.keypoints.conf = None
     model.results = [result]
 
-    (person,) = estimator.estimate(frame)
+    (person,) = estimator.estimate(frame).people
 
     assert [point.confidence for point in person.keypoints] == [0.0] * KEYPOINT_COUNT
 
@@ -185,3 +189,46 @@ def test_coco_keypoints_keep_the_standard_order(name: COCOKeypoint, index: int) 
 def _unavailable_model(weights: str) -> Sequence[object]:
     message = "no such file"
     raise FileNotFoundError(message)
+
+
+def test_the_timing_comes_from_what_the_model_reports(
+    estimator: PoseEstimator, model: FakeYOLO, frame: Frame
+) -> None:
+    model.results = [result_for(people=1, keypoints=KEYPOINT_COUNT)]
+
+    timing = estimator.estimate(frame).timing
+
+    assert timing.preprocess_ms == pytest.approx(SPEED["preprocess"])
+    assert timing.inference_ms == pytest.approx(SPEED["inference"])
+    assert timing.postprocess_ms == pytest.approx(SPEED["postprocess"])
+
+
+def test_the_total_is_the_three_stages_added_up(
+    estimator: PoseEstimator, model: FakeYOLO, frame: Frame
+) -> None:
+    model.results = [result_for(people=1, keypoints=KEYPOINT_COUNT)]
+
+    timing = estimator.estimate(frame).timing
+
+    assert timing.total_ms == pytest.approx(sum(SPEED.values()))
+    assert timing.total_ms > timing.inference_ms
+
+
+def test_a_stage_the_model_did_not_report_counts_as_zero(
+    estimator: PoseEstimator, model: FakeYOLO, frame: Frame
+) -> None:
+    result = result_for(people=1, keypoints=KEYPOINT_COUNT)
+    result.speed = {"inference": 9.0}
+    model.results = [result]
+
+    timing = estimator.estimate(frame).timing
+
+    assert timing.inference_ms == pytest.approx(9.0)
+    assert timing.preprocess_ms == 0.0
+    assert timing.postprocess_ms == 0.0
+
+
+def test_timing_without_any_result_is_zero(estimator: PoseEstimator, frame: Frame) -> None:
+    timing = estimator.estimate(frame).timing
+
+    assert timing.total_ms == 0.0

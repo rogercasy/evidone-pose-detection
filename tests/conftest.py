@@ -5,7 +5,15 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from evidone_pose_detection.models import KEYPOINT_COUNT, BoundingBox, Frame, Keypoint, PersonPose
+from evidone_pose_detection.models import (
+    KEYPOINT_COUNT,
+    BoundingBox,
+    Frame,
+    InferenceTiming,
+    Keypoint,
+    PersonPose,
+    PoseResult,
+)
 
 FRAME_WIDTH = 64
 FRAME_HEIGHT = 48
@@ -89,16 +97,20 @@ def make_person(confidence: float) -> PersonPose:
     )
 
 
+FAKE_TIMING = InferenceTiming(preprocess_ms=0.5, inference_ms=12.5, postprocess_ms=0.25)
+
+
 class FakePoseSource:
     def __init__(self, people: tuple[PersonPose, ...]) -> None:
         self._people = people
         self.seen_frames = 0
         self.last_frame: Frame | None = None
+        self.timing = FAKE_TIMING
 
-    def estimate(self, frame: Frame) -> tuple[PersonPose, ...]:
+    def estimate(self, frame: Frame) -> PoseResult:
         self.seen_frames += 1
         self.last_frame = frame.copy()
-        return self._people
+        return PoseResult(people=self._people, timing=self.timing)
 
 
 @pytest.fixture

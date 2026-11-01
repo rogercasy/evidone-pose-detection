@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from ultralytics.engine.results import Keypoints, Results
@@ -10,9 +10,11 @@ from evidone_pose_detection.models import (
     KEYPOINT_COUNT,
     BoundingBox,
     Frame,
+    InferenceTiming,
     Keypoint,
     PersonPose,
     PoseConfig,
+    PoseResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,12 +26,28 @@ class PoseEstimator:
         self._model = _load_model(config.weights)
         logger.info("Loaded pose model %s", config.weights)
 
-    def estimate(self, frame: Frame) -> tuple[PersonPose, ...]:
+    def estimate(self, frame: Frame) -> PoseResult:
         # predict() is typed for streaming too; without stream=True it is always list[Results].
         results = cast(
             list[Results], self._model.predict(frame, conf=self._config.confidence, verbose=False)
         )
-        return tuple(person for result in results for person in _to_person_poses(result))
+        return PoseResult(
+            people=tuple(person for result in results for person in _to_person_poses(result)),
+            timing=_timing(results),
+        )
+
+
+def _timing(results: Sequence[Results]) -> InferenceTiming:
+    speeds = [result.speed for result in results]
+    return InferenceTiming(
+        preprocess_ms=_total(speeds, "preprocess"),
+        inference_ms=_total(speeds, "inference"),
+        postprocess_ms=_total(speeds, "postprocess"),
+    )
+
+
+def _total(speeds: Sequence[Mapping[str, float | None]], stage: str) -> float:
+    return sum(float(speed.get(stage) or 0.0) for speed in speeds)
 
 
 def _load_model(weights: str) -> YOLO:
