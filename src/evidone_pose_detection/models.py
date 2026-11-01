@@ -1,5 +1,7 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import IntEnum, StrEnum
+from types import MappingProxyType
 from typing import Protocol
 
 import cv2
@@ -28,6 +30,64 @@ class COCOKeypoint(IntEnum):
 
 
 KEYPOINT_COUNT = len(COCOKeypoint)
+
+
+class BodyRegion(StrEnum):
+    HEAD = "head"
+    TORSO = "torso"
+    LIMB = "limb"
+
+
+@dataclass(frozen=True, slots=True)
+class Bone:
+    start: COCOKeypoint
+    end: COCOKeypoint
+    region: BodyRegion
+
+
+KEYPOINT_REGIONS: Mapping[COCOKeypoint, BodyRegion] = MappingProxyType(
+    {
+        COCOKeypoint.NOSE: BodyRegion.HEAD,
+        COCOKeypoint.LEFT_EYE: BodyRegion.HEAD,
+        COCOKeypoint.RIGHT_EYE: BodyRegion.HEAD,
+        COCOKeypoint.LEFT_EAR: BodyRegion.HEAD,
+        COCOKeypoint.RIGHT_EAR: BodyRegion.HEAD,
+        COCOKeypoint.LEFT_SHOULDER: BodyRegion.TORSO,
+        COCOKeypoint.RIGHT_SHOULDER: BodyRegion.TORSO,
+        COCOKeypoint.LEFT_HIP: BodyRegion.TORSO,
+        COCOKeypoint.RIGHT_HIP: BodyRegion.TORSO,
+        COCOKeypoint.LEFT_ELBOW: BodyRegion.LIMB,
+        COCOKeypoint.RIGHT_ELBOW: BodyRegion.LIMB,
+        COCOKeypoint.LEFT_WRIST: BodyRegion.LIMB,
+        COCOKeypoint.RIGHT_WRIST: BodyRegion.LIMB,
+        COCOKeypoint.LEFT_KNEE: BodyRegion.LIMB,
+        COCOKeypoint.RIGHT_KNEE: BodyRegion.LIMB,
+        COCOKeypoint.LEFT_ANKLE: BodyRegion.LIMB,
+        COCOKeypoint.RIGHT_ANKLE: BodyRegion.LIMB,
+    }
+)
+
+SKELETON: tuple[Bone, ...] = (
+    Bone(COCOKeypoint.NOSE, COCOKeypoint.LEFT_EYE, BodyRegion.HEAD),
+    Bone(COCOKeypoint.NOSE, COCOKeypoint.RIGHT_EYE, BodyRegion.HEAD),
+    Bone(COCOKeypoint.LEFT_EYE, COCOKeypoint.RIGHT_EYE, BodyRegion.HEAD),
+    Bone(COCOKeypoint.LEFT_EYE, COCOKeypoint.LEFT_EAR, BodyRegion.HEAD),
+    Bone(COCOKeypoint.RIGHT_EYE, COCOKeypoint.RIGHT_EAR, BodyRegion.HEAD),
+    Bone(COCOKeypoint.LEFT_EAR, COCOKeypoint.LEFT_SHOULDER, BodyRegion.HEAD),
+    Bone(COCOKeypoint.RIGHT_EAR, COCOKeypoint.RIGHT_SHOULDER, BodyRegion.HEAD),
+    Bone(COCOKeypoint.LEFT_SHOULDER, COCOKeypoint.RIGHT_SHOULDER, BodyRegion.TORSO),
+    Bone(COCOKeypoint.LEFT_SHOULDER, COCOKeypoint.LEFT_HIP, BodyRegion.TORSO),
+    Bone(COCOKeypoint.RIGHT_SHOULDER, COCOKeypoint.RIGHT_HIP, BodyRegion.TORSO),
+    Bone(COCOKeypoint.LEFT_HIP, COCOKeypoint.RIGHT_HIP, BodyRegion.TORSO),
+    Bone(COCOKeypoint.LEFT_SHOULDER, COCOKeypoint.LEFT_ELBOW, BodyRegion.LIMB),
+    Bone(COCOKeypoint.LEFT_ELBOW, COCOKeypoint.LEFT_WRIST, BodyRegion.LIMB),
+    Bone(COCOKeypoint.RIGHT_SHOULDER, COCOKeypoint.RIGHT_ELBOW, BodyRegion.LIMB),
+    Bone(COCOKeypoint.RIGHT_ELBOW, COCOKeypoint.RIGHT_WRIST, BodyRegion.LIMB),
+    Bone(COCOKeypoint.LEFT_HIP, COCOKeypoint.LEFT_KNEE, BodyRegion.LIMB),
+    Bone(COCOKeypoint.LEFT_KNEE, COCOKeypoint.LEFT_ANKLE, BodyRegion.LIMB),
+    Bone(COCOKeypoint.RIGHT_HIP, COCOKeypoint.RIGHT_KNEE, BodyRegion.LIMB),
+    Bone(COCOKeypoint.RIGHT_KNEE, COCOKeypoint.RIGHT_ANKLE, BodyRegion.LIMB),
+)
 
 
 @dataclass(frozen=True, slots=True)

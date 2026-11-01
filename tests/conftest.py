@@ -18,6 +18,7 @@ class FakeCapture:
         self._opened = opened
         self._fps = fps
         self.released = 0
+        self.delivered: list[Frame] = []
 
     def isOpened(self) -> bool:
         return self._opened
@@ -30,8 +31,15 @@ class FakeCapture:
         }[prop]
 
     def read(self) -> tuple[bool, Frame | None]:
-        frame = self._frames.pop(0) if self._frames else None
-        return frame is not None, frame
+        if not self._frames:
+            return False, None
+        captured = self._frames.pop(0)
+        if captured is None:
+            return False, None
+        # cv2.VideoCapture allocates a fresh buffer per read; never hand back the same one.
+        frame = captured.copy()
+        self.delivered.append(frame)
+        return True, frame
 
     def release(self) -> None:
         self.released += 1
@@ -85,9 +93,11 @@ class FakePoseSource:
     def __init__(self, people: tuple[PersonPose, ...]) -> None:
         self._people = people
         self.seen_frames = 0
+        self.last_frame: Frame | None = None
 
     def estimate(self, frame: Frame) -> tuple[PersonPose, ...]:
         self.seen_frames += 1
+        self.last_frame = frame.copy()
         return self._people
 
 

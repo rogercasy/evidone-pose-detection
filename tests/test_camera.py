@@ -71,7 +71,10 @@ def test_read_returns_the_captured_frame(
     install_capture(working_capture)
 
     with Camera(CameraConfig(device_index=0)) as camera:
-        assert camera.read() is frame
+        captured = camera.read()
+
+    assert captured is not None
+    assert (captured == frame).all()
 
 
 def test_read_returns_none_when_the_device_stops_delivering(
