@@ -11,6 +11,7 @@ from evidone_pose_detection.models import (
     PersonPose,
 )
 from evidone_pose_detection.vision.anonymization import blur_faces
+from evidone_pose_detection.vision.faces import face_regions
 
 WIDTH = 400
 HEIGHT = 400
@@ -73,7 +74,7 @@ def test_the_face_is_unrecognisable_whatever_size_it_is(half_width: float) -> No
     reach = round(half_width / 2)
     before = detail_at(frame, 200, 200, reach)
 
-    blur_faces(frame, [person])
+    blur_faces(frame, face_regions([person]))
 
     assert detail_at(frame, 200, 200, reach) < before * 0.1
 
@@ -84,7 +85,7 @@ def test_a_large_face_loses_as_much_detail_as_a_small_one() -> None:
         frame = checkerboard(cell=max(1, round(half_width / 4)))
         reach = round(half_width / 2)
         before = detail_at(frame, 200, 200, reach)
-        blur_faces(frame, [face_at(200.0, 200.0, half_width)])
+        blur_faces(frame, face_regions([face_at(200.0, 200.0, half_width)]))
         residues.append(detail_at(frame, 200, 200, reach) / before)
 
     small, large = residues
@@ -95,7 +96,7 @@ def test_pixels_well_outside_the_region_are_untouched() -> None:
     frame = checkerboard(cell=8)
     original = frame.copy()
 
-    blur_faces(frame, [face_at(120.0, 120.0, 30.0)])
+    blur_faces(frame, face_regions([face_at(120.0, 120.0, 30.0)]))
 
     assert (frame[350:, 350:] == original[350:, 350:]).all()
 
@@ -119,7 +120,7 @@ def test_a_region_crossing_the_frame_edge_is_clipped_not_fatal(
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, [face_at(centre_x, centre_y, 60.0)])
+    blur_faces(frame, face_regions([face_at(centre_x, centre_y, 60.0)]))
 
     assert frame.shape == original.shape
     assert (frame != original).any()
@@ -129,7 +130,7 @@ def test_a_region_entirely_off_frame_changes_nothing() -> None:
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, [face_at(-500.0, -500.0, 40.0)])
+    blur_faces(frame, face_regions([face_at(-500.0, -500.0, 40.0)]))
 
     assert (frame == original).all()
 
@@ -138,7 +139,7 @@ def test_a_person_without_a_visible_face_is_left_alone() -> None:
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, [faceless_person()])
+    blur_faces(frame, face_regions([faceless_person()]))
 
     assert (frame == original).all()
 
@@ -147,7 +148,7 @@ def test_a_frame_without_people_is_left_alone() -> None:
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, [])
+    blur_faces(frame, face_regions([]))
 
     assert (frame == original).all()
 
@@ -157,7 +158,7 @@ def test_every_face_in_the_frame_is_hidden() -> None:
     people = [face_at(100.0, 100.0, 40.0), face_at(300.0, 300.0, 40.0)]
     before = [detail_at(frame, 100, 100, 20), detail_at(frame, 300, 300, 20)]
 
-    blur_faces(frame, people)
+    blur_faces(frame, face_regions(people))
 
     assert detail_at(frame, 100, 100, 20) < before[0] * 0.1
     assert detail_at(frame, 300, 300, 20) < before[1] * 0.1
@@ -166,6 +167,6 @@ def test_every_face_in_the_frame_is_hidden() -> None:
 def test_blurring_mutates_the_frame_it_was_given_and_hands_it_back() -> None:
     frame = checkerboard(cell=8)
 
-    hidden = blur_faces(frame, [face_at(200.0, 200.0, 40.0)])
+    hidden = blur_faces(frame, face_regions([face_at(200.0, 200.0, 40.0)]))
 
     assert hidden is frame

@@ -425,3 +425,32 @@ def test_choosing_the_source_already_running_changes_nothing(
 
     assert window._session.camera is before
     assert camera.released == 0
+
+
+def test_a_clip_starting_over_lets_go_of_held_faces(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    install_captures([FakeCapture(frames=[frame], opened=True, fps=25.0)])
+    window = VideoWindow(Camera(CameraConfig(source=CLIP)).__enter__(), FakePoseSource(()))
+    forgotten: list[bool] = []
+    window._tracker.reset = lambda: forgotten.append(True)  # type: ignore[method-assign]
+
+    window._show_next_frame()
+    assert forgotten == [], "nothing was replayed yet"
+
+    window._show_next_frame()
+    assert forgotten == [True], "tracks from the last frame bled into the replay"
+
+
+def test_frames_that_are_not_replays_keep_the_tracks(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    install_captures([FakeCapture(frames=[frame] * 6, opened=True, fps=25.0)])
+    window = VideoWindow(Camera(CameraConfig(source=CLIP)).__enter__(), FakePoseSource(()))
+    forgotten: list[bool] = []
+    window._tracker.reset = lambda: forgotten.append(True)  # type: ignore[method-assign]
+
+    for _ in range(4):
+        window._show_next_frame()
+
+    assert forgotten == []

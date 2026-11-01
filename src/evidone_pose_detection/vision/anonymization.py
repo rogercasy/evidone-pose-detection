@@ -4,17 +4,14 @@ from math import ceil, floor
 import cv2
 import numpy as np
 
-from evidone_pose_detection.models import FaceRegion, Frame, PersonPose
-from evidone_pose_detection.vision.faces import face_region
+from evidone_pose_detection.models import FaceRegion, Frame
 
 FACE_SAMPLE_GRID = 6
 
 
-def blur_faces(frame: Frame, people: Sequence[PersonPose]) -> Frame:
-    for person in people:
-        region = face_region(person)
-        if region is not None:
-            _hide(frame, region)
+def blur_faces(frame: Frame, regions: Sequence[FaceRegion]) -> Frame:
+    for region in regions:
+        _hide(frame, region)
     return frame
 
 

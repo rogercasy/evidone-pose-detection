@@ -14,6 +14,11 @@ from evidone_pose_detection.models import (
 LANDMARK_COVERAGE_MARGIN = 1.6
 
 
+def face_regions(people: Sequence[PersonPose]) -> tuple[FaceRegion, ...]:
+    found = (face_region(person) for person in people)
+    return tuple(region for region in found if region is not None)
+
+
 def face_region(person: PersonPose) -> FaceRegion | None:
     landmarks = [
         person.keypoint(name) for name in FACE_LANDMARKS if person.keypoint(name).is_visible
