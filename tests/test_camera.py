@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from conftest import FRAME_FPS, FRAME_HEIGHT, FRAME_WIDTH, FakeCapture
-from evidone_pose_detection.camera import FALLBACK_FPS, Camera
+from evidone_pose_detection.camera import FALLBACK_FPS, Camera, CaptureSession
 from evidone_pose_detection.errors import CameraNotOpenError, CameraOpenError
 from evidone_pose_detection.models import CameraConfig, Frame
 
@@ -263,3 +263,66 @@ def test_a_clip_with_nothing_to_replay_gives_up(install_capture: InstallCapture)
         assert camera.read() is None
 
     assert capture.rewinds == 1, "it should try once before giving up"
+
+
+def test_a_session_swap_opens_the_replacement_and_releases_the_old(
+    install_captures: Callable[[list[FakeCapture]], list[object]], frame: Frame
+) -> None:
+    first = FakeCapture(frames=[frame] * 4, opened=True, fps=25.0)
+    second = FakeCapture(frames=[frame] * 4, opened=True, fps=25.0)
+    install_captures([first, second])
+    session = CaptureSession(Camera(CameraConfig(source=0)))
+    session.camera.open()
+
+    session.switch_to(CameraConfig(source=Path("clip.avi")))
+
+    assert first.released == 1, "the replaced source was left open"
+    assert second.released == 0
+    assert session.camera.read() is not None
+
+
+def test_a_failed_swap_leaves_the_running_source_untouched(
+    install_captures: Callable[[list[FakeCapture]], list[object]], frame: Frame
+) -> None:
+    running = FakeCapture(frames=[frame] * 4, opened=True, fps=25.0)
+    broken = FakeCapture(frames=[], opened=False, fps=25.0)
+    install_captures([running, broken])
+    session = CaptureSession(Camera(CameraConfig(source=0)))
+    session.camera.open()
+
+    with pytest.raises(CameraOpenError):
+        session.switch_to(CameraConfig(source=Path("missing.avi")))
+
+    assert running.released == 0, "the running source was released by a failed swap"
+    assert session.camera.config == CameraConfig(source=0)
+    assert session.camera.read() is not None, "the running source stopped delivering"
+
+
+def test_a_session_releases_whatever_it_currently_holds(
+    install_captures: Callable[[list[FakeCapture]], list[object]], frame: Frame
+) -> None:
+    first = FakeCapture(frames=[frame] * 4, opened=True, fps=25.0)
+    second = FakeCapture(frames=[frame] * 4, opened=True, fps=25.0)
+    install_captures([first, second])
+    session = CaptureSession(Camera(CameraConfig(source=0)))
+    session.camera.open()
+    session.switch_to(CameraConfig(source=Path("clip.avi")))
+
+    session.release()
+
+    assert (first.released, second.released) == (1, 1), "a handle was left open"
+
+
+def test_every_predecessor_is_released_across_repeated_swaps(
+    install_captures: Callable[[list[FakeCapture]], list[object]], frame: Frame
+) -> None:
+    captures = [FakeCapture(frames=[frame] * 4, opened=True, fps=25.0) for _ in range(4)]
+    install_captures(captures)
+    session = CaptureSession(Camera(CameraConfig(source=0)))
+    session.camera.open()
+
+    for index in range(1, 4):
+        session.switch_to(CameraConfig(source=Path(f"clip{index}.avi")))
+    session.release()
+
+    assert [capture.released for capture in captures] == [1, 1, 1, 1]

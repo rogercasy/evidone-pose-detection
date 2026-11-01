@@ -11,6 +11,9 @@ type Frame = cv2.typing.MatLike
 
 type CaptureSource = int | Path
 
+# The device opened unless another source is asked for.
+DEFAULT_CAMERA_INDEX = 0
+
 
 class COCOKeypoint(IntEnum):
     NOSE = 0

@@ -86,6 +86,27 @@ def install_capture(monkeypatch: pytest.MonkeyPatch) -> Callable[[FakeCapture], 
     return install
 
 
+@pytest.fixture
+def install_captures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[Sequence[FakeCapture]], list[object]]:
+    """Hand out a different fake capture per cv2.VideoCapture call, in order."""
+
+    def install(captures: Sequence[FakeCapture]) -> list[object]:
+        requested: list[object] = []
+        pending = list(captures)
+
+        def video_capture(source: object) -> FakeCapture:
+            requested.append(source)
+            assert pending, "more capture sources were opened than the test provided"
+            return pending.pop(0)
+
+        monkeypatch.setattr("evidone_pose_detection.camera.cv2.VideoCapture", video_capture)
+        return requested
+
+    return install
+
+
 @pytest.fixture(scope="session")
 def application() -> QApplication:
     existing = QApplication.instance()

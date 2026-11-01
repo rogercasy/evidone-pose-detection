@@ -1,11 +1,7 @@
 import pytest
 
-from evidone_pose_detection.cli import (
-    DEFAULT_CAMERA_INDEX,
-    DEFAULT_CONFIDENCE,
-    DEFAULT_WEIGHTS,
-    parse_config,
-)
+from evidone_pose_detection.cli import DEFAULT_CONFIDENCE, DEFAULT_WEIGHTS, parse_config
+from evidone_pose_detection.models import DEFAULT_CAMERA_INDEX
 
 
 @pytest.mark.parametrize(

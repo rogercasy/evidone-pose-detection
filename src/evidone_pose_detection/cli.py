@@ -1,9 +1,8 @@
 import argparse
 from collections.abc import Sequence
 
-from evidone_pose_detection.models import AppConfig, CameraConfig, PoseConfig
+from evidone_pose_detection.models import DEFAULT_CAMERA_INDEX, AppConfig, CameraConfig, PoseConfig
 
-DEFAULT_CAMERA_INDEX = 0
 DEFAULT_CONFIDENCE = 0.4
 DEFAULT_WEIGHTS = "yolo26n-pose.pt"
 

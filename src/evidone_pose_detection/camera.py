@@ -28,6 +28,10 @@ class Camera:
     ) -> None:
         self.release()
 
+    @property
+    def config(self) -> CameraConfig:
+        return self._config
+
     def open(self) -> None:
         source = self._config.source
         try:
@@ -77,3 +81,24 @@ class Camera:
         if self._capture is None:
             raise CameraNotOpenError
         return self._capture
+
+
+class CaptureSession:
+    def __init__(self, camera: Camera) -> None:
+        self._camera = camera
+
+    @property
+    def camera(self) -> Camera:
+        return self._camera
+
+    def switch_to(self, config: CameraConfig) -> Camera:
+        replacement = Camera(config)
+        replacement.open()
+        # Only once the replacement is open does the previous source let go, so a
+        # failure leaves the running source untouched.
+        self._camera.release()
+        self._camera = replacement
+        return replacement
+
+    def release(self) -> None:
+        self._camera.release()
