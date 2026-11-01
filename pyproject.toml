@@ -9,7 +9,11 @@ authors = [
 ]
 
 
-dependencies = []
+dependencies = [
+    "numpy>=2.5.4",
+    "opencv-python-headless>=5.0.0.93",
+    "pyside6>=6.12.0",
+]
 
 [project.urls]
 
@@ -83,6 +87,9 @@ max-args = 10
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ARG", "S101", "PLR2004", "PLR0913"]
 "scripts/**" = ["T20", "S603"]  # Allow print statements and subprocess calls on the scripts
+
+[tool.ruff.lint.pep8-naming]
+extend-ignore-names = ["keyPressEvent", "closeEvent", "isOpened"]  # Qt and OpenCV APIs
 
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false

@@ -1,6 +1,6 @@
 # Makefile for QA checks (lint, format, type-check, tests) and tasks (build, clean, run)
 
-.PHONY: qa lint format typecheck test clean run build repo worktree docs 
+.PHONY: qa lint format typecheck test clean run build repo
 
 # Default target
 qa: lint format typecheck test
@@ -30,19 +30,9 @@ repo:
 	@if git rev-parse --verify -q HEAD >/dev/null; then echo "· initial commit already present"; \
 	else git add --all && git commit -q -m "Initial commit" && echo "· created the initial commit"; fi
 	uv run python scripts/create_remote.py $(REPO_ARGS)
-
-
-worktree:
-	@bash scripts/worktree.sh
-
-docs:
-	@printf "\n\033[1;34mBuilding the documentation\033[0m\n"
-	uv run --group docs zensical build --clean
-
 	
-build: clean docs
+build: clean
 	uv build
-
 
 
 clean:
