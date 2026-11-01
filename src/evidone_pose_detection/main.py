@@ -1,22 +1,36 @@
 import logging
-import os
+import sys
 
-import evidone_pose_detection
+from PySide6.QtWidgets import QApplication
+
+from evidone_pose_detection.camera import Camera
+from evidone_pose_detection.cli import parse_config
+from evidone_pose_detection.errors import CameraOpenError
+from evidone_pose_detection.models import CameraConfig
+from evidone_pose_detection.window import VideoWindow
 
 logger = logging.getLogger(__name__)
 
-COOKIE_PYRATE_VERSION = os.getenv("COOKIE_PYRATE_VERSION", "Not Set")
+CAMERA_ERROR_EXIT_CODE = 2
 
 
-def main() -> None:
-    pkg = "evidone_pose_detection"
-    version = evidone_pose_detection.__version__
+def main() -> int:
+    config = parse_config(sys.argv[1:])
+    try:
+        return run(config)
+    except CameraOpenError:
+        logger.exception("Cannot start the video loop")
+        return CAMERA_ERROR_EXIT_CODE
 
-    logger.info("Package '%s' installed with version: %s", pkg, version)
-    logger.info("Generated using Cookie Pyrate Version: %s", COOKIE_PYRATE_VERSION)
 
-    logger.info("Life is beautiful!")
+def run(config: CameraConfig) -> int:
+    application = QApplication([])
+    with Camera(config) as camera:
+        window = VideoWindow(camera)
+        window.show()
+        window.start()
+        return application.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

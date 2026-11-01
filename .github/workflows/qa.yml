@@ -11,5 +11,6 @@ jobs:
     with:
       cookie-pyrate-ref: v1.1.0
       python-version: "3.12"
+      system-dependencies: libegl1 libgl1 libxkbcommon0 libdbus-1-3
       # A library can also run its tests on the newer Pythons its users have:
       # test-python-versions: '["3.12", "3.13", "3.14", "3.15"]'
