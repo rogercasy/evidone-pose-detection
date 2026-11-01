@@ -468,7 +468,7 @@ wheels = [
 
 [[package]]
 name = "evidone-pose-detection"
-version = "0.1.10b0"
+version = "0.1.10"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
