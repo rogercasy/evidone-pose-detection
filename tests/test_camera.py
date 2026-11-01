@@ -114,3 +114,25 @@ def test_release_is_idempotent(
     camera.release()
 
     assert working_capture.released == 1
+
+
+def test_a_capture_backend_that_explodes_becomes_our_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def explode(index: int) -> FakeCapture:
+        message = "OpenCV(5.0.0) failed to query the v4l2 backend"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("evidone_pose_detection.camera.cv2.VideoCapture", explode)
+
+    with pytest.raises(CameraOpenError) as error:
+        Camera(CameraConfig(device_index=3)).open()
+
+    assert error.value.device_index == 3
+    assert isinstance(error.value.__cause__, RuntimeError)
+
+
+def test_the_camera_error_carries_a_message_of_its_own() -> None:
+    message = str(CameraOpenError(2))
+
+    assert "2" in message
+    assert message != ""
+    assert "Traceback" not in message
