@@ -3,12 +3,11 @@ from types import TracebackType
 
 import cv2
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.errors import CameraNotOpenError, CameraOpenError
 from evidone_pose_detection.models import CameraConfig, CaptureProperties, Frame
 
 logger = logging.getLogger(__name__)
-
-FALLBACK_FPS = 30.0
 
 
 class Camera:
@@ -56,7 +55,7 @@ class Camera:
         return CaptureProperties(
             width=round(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
             height=round(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            fps=fps if fps > 0 else FALLBACK_FPS,
+            fps=fps if fps > 0 else CONFIG.camera.fallback_fps,
         )
 
     def read(self) -> Frame | None:

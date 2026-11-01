@@ -4,12 +4,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.errors import RecordingError
 from evidone_pose_detection.models import Frame
 
 logger = logging.getLogger(__name__)
-
-FOURCC = "mp4v"
 
 
 class Recorder:
@@ -57,7 +56,10 @@ class Recorder:
 
         height, width = frame.shape[:2]
         writer = cv2.VideoWriter(
-            str(destination), cv2.VideoWriter.fourcc(*FOURCC), self._fps, (width, height)
+            str(destination),
+            cv2.VideoWriter.fourcc(*CONFIG.output.fourcc),
+            self._fps,
+            (width, height),
         )
         if not writer.isOpened():
             writer.release()

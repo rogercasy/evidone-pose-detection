@@ -7,6 +7,10 @@ class EvidoneError(Exception):
     pass
 
 
+class ConfigError(EvidoneError):
+    pass
+
+
 class CameraOpenError(EvidoneError):
     def __init__(self, source: CaptureSource) -> None:
         super().__init__(f"could not open {_describe(source)}")

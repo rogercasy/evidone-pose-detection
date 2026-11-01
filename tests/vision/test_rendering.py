@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import (
-    VISIBILITY_THRESHOLD,
     BodyRegion,
     BoundingBox,
     COCOKeypoint,
@@ -10,11 +10,11 @@ from evidone_pose_detection.models import (
     Keypoint,
     PersonPose,
 )
-from evidone_pose_detection.vision.rendering import REGION_COLOURS, draw_poses
+from evidone_pose_detection.vision.rendering import draw_poses
 
 WIDTH = 200
 HEIGHT = 160
-HIDDEN = VISIBILITY_THRESHOLD - 0.01
+HIDDEN = CONFIG.faces.visibility_threshold - 0.01
 BLACK = (0, 0, 0)
 
 
@@ -61,7 +61,7 @@ def test_a_visible_keypoint_draws_a_dot_in_its_region_colour(
 
     draw_poses(frame, [person_showing({name: (80.0, 90.0)}, confidence=0.9)])
 
-    assert pixel(frame, 80, 90) == REGION_COLOURS[region]
+    assert pixel(frame, 80, 90) == CONFIG.skeleton.colours[region]
 
 
 def test_a_keypoint_below_the_threshold_draws_nothing() -> None:
@@ -76,10 +76,15 @@ def test_a_keypoint_exactly_at_the_threshold_is_drawn() -> None:
     frame = blank()
 
     draw_poses(
-        frame, [person_showing({COCOKeypoint.NOSE: (80.0, 90.0)}, confidence=VISIBILITY_THRESHOLD)]
+        frame,
+        [
+            person_showing(
+                {COCOKeypoint.NOSE: (80.0, 90.0)}, confidence=CONFIG.faces.visibility_threshold
+            )
+        ],
     )
 
-    assert pixel(frame, 80, 90) == REGION_COLOURS[BodyRegion.HEAD]
+    assert pixel(frame, 80, 90) == CONFIG.skeleton.colours[BodyRegion.HEAD]
 
 
 def test_a_bone_is_drawn_when_both_endpoints_are_visible() -> None:
@@ -91,7 +96,7 @@ def test_a_bone_is_drawn_when_both_endpoints_are_visible() -> None:
 
     draw_poses(frame, [person_showing(shoulders, confidence=0.9)])
 
-    assert pixel(frame, 90, 100) == REGION_COLOURS[BodyRegion.TORSO]
+    assert pixel(frame, 90, 100) == CONFIG.skeleton.colours[BodyRegion.TORSO]
 
 
 def test_a_bone_is_skipped_when_one_endpoint_is_hidden() -> None:
@@ -100,7 +105,7 @@ def test_a_bone_is_skipped_when_one_endpoint_is_hidden() -> None:
     draw_poses(frame, [person_showing({COCOKeypoint.LEFT_SHOULDER: (40.0, 100.0)}, confidence=0.9)])
 
     assert pixel(frame, 90, 100) == BLACK
-    assert pixel(frame, 40, 100) == REGION_COLOURS[BodyRegion.TORSO]
+    assert pixel(frame, 40, 100) == CONFIG.skeleton.colours[BodyRegion.TORSO]
 
 
 def test_limb_bones_use_the_limb_colour_not_the_joint_colour() -> None:
@@ -109,12 +114,12 @@ def test_limb_bones_use_the_limb_colour_not_the_joint_colour() -> None:
 
     draw_poses(frame, [person_showing(arm, confidence=0.9)])
 
-    assert pixel(frame, 90, 20) == REGION_COLOURS[BodyRegion.LIMB]
-    assert pixel(frame, 40, 20) == REGION_COLOURS[BodyRegion.TORSO]
+    assert pixel(frame, 90, 20) == CONFIG.skeleton.colours[BodyRegion.LIMB]
+    assert pixel(frame, 40, 20) == CONFIG.skeleton.colours[BodyRegion.TORSO]
 
 
 def test_head_torso_and_limbs_are_told_apart_by_colour() -> None:
-    assert len(set(REGION_COLOURS.values())) == len(BodyRegion)
+    assert len(set(CONFIG.skeleton.colours.values())) == len(BodyRegion)
 
 
 def test_drawing_mutates_the_frame_it_was_given_and_hands_it_back() -> None:
@@ -135,8 +140,8 @@ def test_two_people_are_both_drawn() -> None:
 
     draw_poses(frame, people)
 
-    assert pixel(frame, 40, 40) == REGION_COLOURS[BodyRegion.HEAD]
-    assert pixel(frame, 160, 120) == REGION_COLOURS[BodyRegion.HEAD]
+    assert pixel(frame, 40, 40) == CONFIG.skeleton.colours[BodyRegion.HEAD]
+    assert pixel(frame, 160, 120) == CONFIG.skeleton.colours[BodyRegion.HEAD]
 
 
 def test_a_frame_without_people_is_left_untouched() -> None:

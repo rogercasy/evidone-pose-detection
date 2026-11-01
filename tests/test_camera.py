@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 
 from conftest import FRAME_FPS, FRAME_HEIGHT, FRAME_WIDTH, FakeCapture
-from evidone_pose_detection.camera import FALLBACK_FPS, Camera, CaptureSession
+from evidone_pose_detection.camera import Camera, CaptureSession
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.errors import CameraNotOpenError, CameraOpenError
 from evidone_pose_detection.models import CameraConfig, Frame
 
@@ -66,7 +67,7 @@ def test_properties_fall_back_when_the_device_reports_no_rate(
     install_capture(FakeCapture(frames=[], opened=True, fps=reported_fps))
 
     with Camera(CameraConfig(source=0)) as camera:
-        assert camera.properties().fps == FALLBACK_FPS
+        assert camera.properties().fps == CONFIG.camera.fallback_fps
 
 
 def test_read_returns_the_captured_frame(

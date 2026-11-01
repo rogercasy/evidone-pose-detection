@@ -11,9 +11,6 @@ type Frame = cv2.typing.MatLike
 
 type CaptureSource = int | Path
 
-# The device opened unless another source is asked for.
-DEFAULT_CAMERA_INDEX = 0
-
 
 class COCOKeypoint(IntEnum):
     NOSE = 0
@@ -37,17 +34,11 @@ class COCOKeypoint(IntEnum):
 
 KEYPOINT_COUNT = len(COCOKeypoint)
 
-VISIBILITY_THRESHOLD = 0.5
-
 
 class HideStyle(StrEnum):
     BLUR = "blur"
     PIXELATE = "pixelate"
     FILL = "fill"
-
-
-DEFAULT_HIDE_STYLE = HideStyle.BLUR
-DEFAULT_DRAW_SKELETON = True
 
 
 class BodyRegion(StrEnum):
@@ -129,21 +120,111 @@ FACE_LANDMARKS: tuple[COCOKeypoint, ...] = (
     COCOKeypoint.RIGHT_EAR,
 )
 
-# Each span collapses at a different head angle, so the largest estimate wins.
-# The scales are deliberately generous: over-covering only blurs background.
-FACE_SPANS: tuple[FaceSpan, ...] = (
-    FaceSpan(COCOKeypoint.LEFT_EYE, COCOKeypoint.RIGHT_EYE, 2.0),
-    FaceSpan(COCOKeypoint.LEFT_EAR, COCOKeypoint.RIGHT_EAR, 0.9),
-    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.LEFT_EAR, 1.2),
-    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.RIGHT_EAR, 1.2),
-    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.LEFT_EYE, 2.6),
-    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.RIGHT_EYE, 2.6),
-    FaceSpan(COCOKeypoint.LEFT_EYE, COCOKeypoint.LEFT_EAR, 1.8),
-    FaceSpan(COCOKeypoint.RIGHT_EYE, COCOKeypoint.RIGHT_EAR, 1.8),
-)
 
-# Used only when a single face landmark is visible, so no face span can be measured.
-SHOULDER_SPAN = FaceSpan(COCOKeypoint.LEFT_SHOULDER, COCOKeypoint.RIGHT_SHOULDER, 0.35)
+type Colour = tuple[int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class CameraSettings:
+    default_index: int
+    fallback_fps: float
+
+
+@dataclass(frozen=True, slots=True)
+class PoseSettings:
+    weights: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class FaceSettings:
+    visibility_threshold: float
+    landmark_coverage_margin: float
+    shoulder_scale: float
+    spans: tuple[FaceSpan, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TrackingSettings:
+    match_distance_ratio: float
+    smoothing: float
+    hold_frames: int
+    hold_growth_per_frame: float
+
+
+@dataclass(frozen=True, slots=True)
+class HidingSettings:
+    default_style: HideStyle
+    blur_samples: int
+    pixel_blocks: int
+    fill_colour: Colour
+
+
+@dataclass(frozen=True, slots=True)
+class SkeletonSettings:
+    draw_by_default: bool
+    joint_radius: int
+    bone_thickness: int
+    colours: Mapping[BodyRegion, Colour]
+
+
+@dataclass(frozen=True, slots=True)
+class PanelSettings:
+    origin: tuple[int, int]
+    padding: int
+    alpha: float
+    colour: Colour
+    text_colour: Colour
+    font_scale: float
+    font_thickness: int
+    line_height: int
+
+
+@dataclass(frozen=True, slots=True)
+class WindowSettings:
+    title: str
+    view_background: str
+    minimum_yield_ms: int
+    frame_rate_window: int
+
+
+@dataclass(frozen=True, slots=True)
+class OutputSettings:
+    stem: str
+    fourcc: str
+
+
+@dataclass(frozen=True, slots=True)
+class LabelSettings:
+    toolbar: str
+    settings: str
+    source: str
+    camera: str
+    video_file: str
+    hiding: str
+    skeleton: str
+    record: str
+    detection_log: str
+    file_dialog_title: str
+    video_file_filter: str
+    source_error_title: str
+    recording_error_title: str
+    log_error_title: str
+    styles: Mapping[HideStyle, str]
+
+
+@dataclass(frozen=True, slots=True)
+class Config:
+    camera: CameraSettings
+    pose: PoseSettings
+    faces: FaceSettings
+    tracking: TrackingSettings
+    hiding: HidingSettings
+    skeleton: SkeletonSettings
+    panel: PanelSettings
+    window: WindowSettings
+    output: OutputSettings
+    labels: LabelSettings
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,10 +253,6 @@ class ViewSettings:
     hide_style: HideStyle
     draw_skeleton: bool
 
-    @classmethod
-    def defaults(cls) -> "ViewSettings":
-        return cls(hide_style=DEFAULT_HIDE_STYLE, draw_skeleton=DEFAULT_DRAW_SKELETON)
-
 
 @dataclass(frozen=True, slots=True)
 class CaptureProperties:
@@ -201,10 +278,6 @@ class Keypoint:
     x: float
     y: float
     confidence: float
-
-    @property
-    def is_visible(self) -> bool:
-        return self.confidence >= VISIBILITY_THRESHOLD
 
 
 @dataclass(frozen=True, slots=True)

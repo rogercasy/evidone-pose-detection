@@ -3,21 +3,20 @@ from collections.abc import Mapping
 
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import (
     FACE_LANDMARKS,
-    FACE_SPANS,
-    SHOULDER_SPAN,
-    VISIBILITY_THRESHOLD,
     BoundingBox,
     COCOKeypoint,
     FaceRegion,
     Keypoint,
     PersonPose,
 )
-from evidone_pose_detection.vision.faces import LANDMARK_COVERAGE_MARGIN, face_region
+from evidone_pose_detection.vision.faces import face_region
+from evidone_pose_detection.vision.visibility import is_visible
 
 SEEN = 0.9
-UNSEEN = VISIBILITY_THRESHOLD - 0.01
+UNSEEN = CONFIG.faces.visibility_threshold - 0.01
 
 Points = Mapping[COCOKeypoint, tuple[float, float, float]]
 
@@ -93,7 +92,7 @@ def test_the_region_covers_every_visible_face_keypoint(name: str, points: Points
     assert region is not None
     for landmark in FACE_LANDMARKS:
         keypoint = person.keypoint(landmark)
-        if keypoint.is_visible:
+        if is_visible(keypoint):
             assert covers(region, keypoint), f"{landmark.name} escaped the region"
 
 
@@ -156,7 +155,7 @@ def test_a_lone_landmark_falls_back_to_the_shoulders() -> None:
     region = face_region(person_with(lone_nose))
 
     assert region is not None
-    assert region.radius == pytest.approx(80.0 * SHOULDER_SPAN.radius_scale)
+    assert region.radius == pytest.approx(80.0 * CONFIG.faces.shoulder_scale)
     assert (region.centre_x, region.centre_y) == (100.0, 100.0)
 
 
@@ -166,8 +165,8 @@ def test_a_lone_landmark_without_shoulders_has_no_region() -> None:
 
 def test_a_keypoint_exactly_at_the_threshold_counts_as_visible() -> None:
     borderline = {
-        COCOKeypoint.LEFT_EYE: (90.0, 92.0, VISIBILITY_THRESHOLD),
-        COCOKeypoint.RIGHT_EYE: (110.0, 92.0, VISIBILITY_THRESHOLD),
+        COCOKeypoint.LEFT_EYE: (90.0, 92.0, CONFIG.faces.visibility_threshold),
+        COCOKeypoint.RIGHT_EYE: (110.0, 92.0, CONFIG.faces.visibility_threshold),
     }
 
     assert face_region(person_with(borderline)) is not None
@@ -189,18 +188,18 @@ def test_the_region_scales_with_the_head(scale: float) -> None:
 
 
 def test_every_face_span_uses_two_different_face_landmarks() -> None:
-    for span in FACE_SPANS:
+    for span in CONFIG.faces.spans:
         assert span.start in FACE_LANDMARKS
         assert span.end in FACE_LANDMARKS
         assert span.start != span.end
 
 
 def test_the_spans_are_independent_measurements() -> None:
-    pairs = {frozenset((span.start, span.end)) for span in FACE_SPANS}
+    pairs = {frozenset((span.start, span.end)) for span in CONFIG.faces.spans}
 
-    assert len(pairs) == len(FACE_SPANS)
-    assert len(FACE_SPANS) >= 4
+    assert len(pairs) == len(CONFIG.faces.spans)
+    assert len(CONFIG.faces.spans) >= 4
 
 
 def test_coverage_margin_grows_the_region_beyond_the_landmarks() -> None:
-    assert LANDMARK_COVERAGE_MARGIN > 1.0
+    assert CONFIG.faces.landmark_coverage_margin > 1.0

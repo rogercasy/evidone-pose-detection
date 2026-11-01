@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import (
     FACE_LANDMARKS,
-    VISIBILITY_THRESHOLD,
     BoundingBox,
     COCOKeypoint,
     Frame,
@@ -13,7 +13,6 @@ from evidone_pose_detection.models import (
 )
 from evidone_pose_detection.vision.anonymization import STYLES, hide_faces
 from evidone_pose_detection.vision.faces import face_regions
-from evidone_pose_detection.vision.styles import FILL_COLOUR
 
 WIDTH = 400
 HEIGHT = 400
@@ -21,7 +20,7 @@ HEIGHT = 400
 # The suite below pins behaviour shared by every style; STYLE is the one it runs with.
 STYLE = HideStyle.BLUR
 SEEN = 0.9
-UNSEEN = VISIBILITY_THRESHOLD - 0.01
+UNSEEN = CONFIG.faces.visibility_threshold - 0.01
 
 
 def checkerboard(cell: int) -> Frame:
@@ -280,5 +279,5 @@ def test_a_solid_fill_leaves_one_colour_behind() -> None:
 
     hide_faces(frame, face_regions([face_at(200.0, 200.0, FACE_HALF_WIDTH)]), HideStyle.FILL)
 
-    assert tuple(int(channel) for channel in frame[200, 200]) == FILL_COLOUR
+    assert tuple(int(channel) for channel in frame[200, 200]) == CONFIG.hiding.fill_colour
     assert detail_at(frame, 200, 200, 20) == pytest.approx(0.0)

@@ -3,14 +3,9 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import Frame
-from evidone_pose_detection.vision.styles import (
-    FILL_COLOUR,
-    PIXEL_BLOCKS,
-    blurred,
-    filled,
-    pixelated,
-)
+from evidone_pose_detection.vision.styles import blurred, filled, pixelated
 
 Conceal = Callable[[Frame], Frame]
 
@@ -61,7 +56,7 @@ def test_a_fill_is_one_colour_everywhere() -> None:
     concealed = filled(noise(80))
 
     assert float(concealed.std()) == 0.0
-    assert tuple(int(channel) for channel in concealed[0, 0]) == FILL_COLOUR
+    assert tuple(int(channel) for channel in concealed[0, 0]) == CONFIG.hiding.fill_colour
 
 
 @pytest.mark.parametrize("size", [64, 160, 320])
@@ -72,8 +67,8 @@ def test_pixel_blocks_are_the_patch_divided_by_the_block_count(size: int) -> Non
     edges = np.flatnonzero(np.diff(row)) + 1
     widths = np.diff(np.concatenate(([0], edges, [size])))
 
-    assert len(edges) <= PIXEL_BLOCKS
-    assert float(np.median(widths)) == pytest.approx(size / PIXEL_BLOCKS, rel=0.2)
+    assert len(edges) <= CONFIG.hiding.pixel_blocks
+    assert float(np.median(widths)) == pytest.approx(size / CONFIG.hiding.pixel_blocks, rel=0.2)
 
 
 def test_a_bigger_patch_gets_bigger_blocks() -> None:

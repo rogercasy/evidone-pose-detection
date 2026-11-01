@@ -6,8 +6,8 @@
 
 **Real-Time Pose Detection with Face Anonymization**
 
-[![QA](https://github.com/rogercasy/evidone-pose-detection/actions/workflows/qa.yml/badge.svg)](https://github.com/rogercasy/evidone-pose-detection/actions/workflows/qa.yml)
-[![Release](https://img.shields.io/github/v/release/rogercasy/evidone-pose-detection?label=release)](https://github.com/rogercasy/evidone-pose-detection/releases/latest)
+[![QA](https://github.com/rogercasy/evidone-exercise/actions/workflows/qa.yml/badge.svg)](https://github.com/rogercasy/evidone-exercise/actions/workflows/qa.yml)
+[![Release](https://img.shields.io/github/v/release/rogercasy/evidone-exercise?label=release)](https://github.com/rogercasy/evidone-exercise/releases/latest)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 <br>
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -15,93 +15,91 @@
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 
 <!-- Badges to move into the rows above once they apply:
-[![PyPI](https://img.shields.io/pypi/v/evidone_pose_detection)](https://pypi.org/project/evidone_pose_detection/)
-[![Docker image](https://img.shields.io/badge/docker-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/rogercasy/evidone-pose-detection/pkgs/container/evidone-pose-detection)
-[![Docs](https://readthedocs.org/projects/evidone-pose-detection/badge/?version=latest)](https://evidone-pose-detection.readthedocs.io)
+[![PyPI](https://img.shields.io/pypi/v/evidone_exercise)](https://pypi.org/project/evidone_exercise/)
+[![Docker image](https://img.shields.io/badge/docker-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/rogercasy/evidone-exercise/pkgs/container/evidone-exercise)
+[![Docs](https://readthedocs.org/projects/evidone-exercise/badge/?version=latest)](https://evidone-exercise.readthedocs.io)
 -->
 
-[Quick start](#quick-start) · [Usage](#usage) · [Development](#development)
+[Features](#features) · [Requirements](#requirements) · [Setup](#setup) · [Usage](#usage)
+<br>
+[Assumptions](#assumptions) · [Development](#development) · [Contributing](#contributing)
 
 </div>
 
 ---
 
-_What it does, for whom, and why it's different, in two or three sentences._
+Tracks the pose of everyone in a camera feed or a video, and hides their faces while doing it.
+
+![modes: blur, pixelate, fill](assets/example.jpg)
 
 ## Features
 
-- _**Feature.** What it gives the user._
+- Real-time pose detection on the CPU for everyone in frame, 17 keypoints each.
+- Automatic face hiding: blur, pixelation or a solid fill.
+- Skeleton overlay with head, torso and limbs coloured apart.
+- FPS, inference time and people count on screen.
+- Webcam by device index, or a video file on a loop.
+- Everything switchable while it runs, from the toolbar.
+- Optional outputs: an mp4 of the processed video and a JSON Lines log of every box and keypoint.
 
-## Quick start
+## Requirements
+
+- Python 3.12 or newer
+- [uv](https://docs.astral.sh/uv/)
+- A camera exposed to the OS (`/dev/video*` on Linux)
+- On a minimal Linux box, the system libraries Qt links against:
+  `libegl1 libgl1 libxkbcommon0 libdbus-1-3`
+
+## Setup
 
 ```bash
 uv sync
 ```
 
+## Usage
+
 ```bash
-cp .env.example .env  # Configure as needed
 uv run evidone
 ```
 
-## Usage
+The first run downloads the pose weights (`yolo26n-pose.pt`, ~7.6 MB) into the working directory;
+they are gitignored.
 
-_The smallest example that shows the main thing it does._
+Two options set the starting values:
 
-## Module layout
+| Option | Default | What it does |
+| --- | --- | --- |
+| `--camera INDEX` | `0` | Camera device index to open. |
+| `--confidence SCORE` | `0.4` | Minimum detection confidence, above 0 and up to 1. |
 
-```text
-src/evidone_pose_detection/
-├── main.py          # entry point: CLI -> Qt app -> camera lifetime
-├── cli.py           # argument parsing into AppConfig
-├── camera.py        # cv2.VideoCapture wrapper; releases the device on the way out
-├── models.py        # shared dataclasses, COCO keypoints, skeleton and face landmark data
-├── errors.py        # error types
-├── vision/          # everything that reads or paints a frame
-│   ├── pose.py          # the only module that imports torch / ultralytics
-│   ├── faces.py         # face regions worked out from pose keypoints alone
-│   ├── tracking.py      # matches regions across frames, smooths and holds them
-│   ├── anonymization.py # where and how much to conceal: clipping, masking, dispatch
-│   ├── styles.py        # what concealment looks like: blur, pixelate, solid fill
-│   └── rendering.py     # draws the COCO-17 skeleton
-└── ui/
-    └── window.py    # Qt window; drives the per-frame loop
+```bash
+uv run evidone --camera 1 --confidence 0.5
 ```
 
-Each frame runs `estimate → blur → draw`, so the skeleton stays sharp on top of a hidden face.
+Both are starting values only. The toolbar changes them while the app runs, along with the source,
+how faces are hidden, the skeleton and the optional recording and JSON log. `Q` or `Esc` closes the
+window.
 
-`vision/__init__.py` re-exports `blur_faces`, `draw_poses` and `face_region` — but deliberately
-not `PoseEstimator`. That class is the single door to torch/ultralytics (~0.9 s to import), so it
-is reached at `evidone_pose_detection.vision.pose` and importing `vision` or `ui` loads no ML
-stack at all.
+## Assumptions and Design Decisions
 
-`tests/` mirrors this tree (`vision/faces.py` → `tests/vision/test_faces.py`), and
-`tests/test_architecture.py` enforces both rules: that only `vision/pose.py` names the ML
-packages, and that importing `ui` or `vision` really does not pull them in.
+- **CPU inference:** I chose the YOLO26 nano pose model to keep the application lightweight and make sure it runs on a regular laptop without a GPU.
+- **Face detection:** Face regions are estimated directly from the pose keypoints, without using a separate face detector. When facial keypoints are missing, I use the shoulders or person bounding box as a fallback.
+- **Face anonymization:** I added some basic tracking and smoothing between frames to avoid flickering when detections are unstable. This may occasionally blur an area for a few extra frames, but I preferred that over exposing a face.
+- **Performance:** Inference time is measured around the complete prediction call, including preprocessing and postprocessing.
+- **Visualization:** Skeletons and keypoints are drawn directly with OpenCV instead of using Ultralytics' built-in visualization functions.
+- **Implementation:** I kept the dependencies and data structures simple, focusing on readability and the requirements of the exercise.
 
-## Privacy trade-off
 
-A face region is kept and kept blurred for a few frames after the model stops reporting it
-(`DEFAULT_HOLD_FRAMES` in `vision/tracking.py`; `0` turns holding off).
+## How I used AI assistants
 
-**What it buys.** The model drops a face now and then — a turned head, motion blur, an awkward
-frame. Without holding, every drop is one clean, unblurred frame of that person's face.
+I worked through Claude Code, one issue at a time. I wrote each prompt myself, stating the goal and the constraints but not the solution: the thresholds, the fallbacks and the structure were its calls to make, and mine to accept or send back.
+Nothing landed unreviewed. I read every diff, rejected what I disagreed with, and asked for another pass when the result was close but wrong. Pull request descriptions were written from the diff rather than from the conversation, so they describe what shipped instead of what was planned.
 
-**What it costs.**
-
-- A held region sits where the face was *last seen*. We do not know where the face actually
-  went, so if it kept moving it can travel out from under the cover. The region widens by a
-  fixed share of its radius per held frame to absorb some of that, but widening is a guess, not
-  a measurement, and a fast-moving face can still be exposed.
-- That widening blurs more of the surrounding picture for every frame a face is held.
-- A false detection is held on exactly the same terms, so a wrong blur lingers just as long.
-- When the budget runs out the region is dropped whether or not the face is still there.
-  Holding delays exposure; it does not remove it.
-
-Raising the budget covers longer dropouts and enlarges every one of those costs in step.
+The assistant's own account of how we worked is in [AI-USAGE.md](AI-USAGE.md), with the session transcripts next to it.
 
 ## Development
 
-Setup, QA, docs and releases: [DEVELOPMENT.md](DEVELOPMENT.md).
+Setup, QA, releases and CI: [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Contributing
 
