@@ -76,6 +76,27 @@ stack at all.
 `tests/test_architecture.py` enforces both rules: that only `vision/pose.py` names the ML
 packages, and that importing `ui` or `vision` really does not pull them in.
 
+## Privacy trade-off
+
+A face region is kept and kept blurred for a few frames after the model stops reporting it
+(`DEFAULT_HOLD_FRAMES` in `vision/tracking.py`; `0` turns holding off).
+
+**What it buys.** The model drops a face now and then — a turned head, motion blur, an awkward
+frame. Without holding, every drop is one clean, unblurred frame of that person's face.
+
+**What it costs.**
+
+- A held region sits where the face was *last seen*. We do not know where the face actually
+  went, so if it kept moving it can travel out from under the cover. The region widens by a
+  fixed share of its radius per held frame to absorb some of that, but widening is a guess, not
+  a measurement, and a fast-moving face can still be exposed.
+- That widening blurs more of the surrounding picture for every frame a face is held.
+- A false detection is held on exactly the same terms, so a wrong blur lingers just as long.
+- When the budget runs out the region is dropped whether or not the face is still there.
+  Holding delays exposure; it does not remove it.
+
+Raising the budget covers longer dropouts and enlarges every one of those costs in step.
+
 ## Development
 
 Setup, QA, docs and releases: [DEVELOPMENT.md](DEVELOPMENT.md).

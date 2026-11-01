@@ -33,6 +33,7 @@ from evidone_pose_detection.vision import (
     draw_stats,
     face_regions,
 )
+from evidone_pose_detection.vision.tracking import DEFAULT_HOLD_FRAMES
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,8 @@ class VideoWindow(QMainWindow):
         self._people: tuple[PersonPose, ...] = ()
         self._frame_rate = FrameRate(FRAME_RATE_WINDOW)
         self._camera_index = _starting_camera_index(camera.config)
-        self._tracker = FaceTracker()
+        self._tracker = FaceTracker(hold_frames=DEFAULT_HOLD_FRAMES)
+        self._replays = camera.replays
         self._view = _build_view()
         self._interval_ms = properties.frame_interval_ms
         self._running = False
@@ -101,6 +103,7 @@ class VideoWindow(QMainWindow):
             self.close()
             return
 
+        self._forget_tracks_across_a_replay()
         result = self._poses.estimate(frame)
         self._show_people(result.people)
         blur_faces(frame, self._tracker.track(face_regions(result.people)))
@@ -128,6 +131,12 @@ class VideoWindow(QMainWindow):
         elapsed_ms = round((time.perf_counter() - started) * 1000)
         self._timer.start(max(MINIMUM_YIELD_MS, self._interval_ms - elapsed_ms))
 
+    def _forget_tracks_across_a_replay(self) -> None:
+        replays = self._session.camera.replays
+        if replays != self._replays:
+            self._replays = replays
+            self._tracker.reset()
+
     def _choose_camera(self) -> None:
         self._switch_to(CameraConfig(source=self._camera_index))
 
@@ -154,6 +163,7 @@ class VideoWindow(QMainWindow):
             self._camera_index = config.source
         self._interval_ms = camera.properties().frame_interval_ms
         self._tracker.reset()
+        self._replays = camera.replays
         self._mark_active_source()
         logger.info("Switched the source to %s", config.source)
 

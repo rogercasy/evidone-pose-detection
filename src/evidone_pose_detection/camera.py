@@ -15,6 +15,7 @@ class Camera:
     def __init__(self, config: CameraConfig) -> None:
         self._config = config
         self._capture: cv2.VideoCapture | None = None
+        self._replays = 0
 
     def __enter__(self) -> "Camera":
         self.open()
@@ -31,6 +32,10 @@ class Camera:
     @property
     def config(self) -> CameraConfig:
         return self._config
+
+    @property
+    def replays(self) -> int:
+        return self._replays
 
     def open(self) -> None:
         source = self._config.source
@@ -68,7 +73,10 @@ class Camera:
         logger.debug("Rewinding %s", self._config.source)
         capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
         read, frame = capture.read()
-        return frame if read else None
+        if not read:
+            return None
+        self._replays += 1
+        return frame
 
     def release(self) -> None:
         if self._capture is None:

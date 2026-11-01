@@ -326,3 +326,39 @@ def test_every_predecessor_is_released_across_repeated_swaps(
     session.release()
 
     assert [capture.released for capture in captures] == [1, 1, 1, 1]
+
+
+def test_a_clip_counts_the_times_it_started_over(
+    install_capture: InstallCapture, frame: Frame
+) -> None:
+    capture = FakeCapture(frames=[frame], opened=True, fps=25.0)
+    install_capture(capture)
+
+    with Camera(CameraConfig(source=Path("clip.avi"))) as camera:
+        assert camera.replays == 0
+        camera.read()
+        assert camera.replays == 0, "a normal frame is not a replay"
+        camera.read()
+        assert camera.replays == 1
+        camera.read()
+        assert camera.replays == 2
+
+
+def test_a_camera_never_reports_a_replay(install_capture: InstallCapture, frame: Frame) -> None:
+    capture = FakeCapture(frames=[frame], opened=True, fps=25.0)
+    install_capture(capture)
+
+    with Camera(CameraConfig(source=0)) as camera:
+        camera.read()
+        camera.read()
+
+        assert camera.replays == 0
+
+
+def test_a_clip_that_cannot_be_replayed_is_not_counted(install_capture: InstallCapture) -> None:
+    capture = FakeCapture(frames=[], opened=True, fps=25.0)
+    install_capture(capture)
+
+    with Camera(CameraConfig(source=Path("empty.avi"))) as camera:
+        assert camera.read() is None
+        assert camera.replays == 0
