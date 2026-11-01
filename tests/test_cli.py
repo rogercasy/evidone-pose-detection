@@ -1,11 +1,7 @@
 import pytest
 
-from evidone_pose_detection.cli import (
-    DEFAULT_CAMERA_INDEX,
-    DEFAULT_CONFIDENCE,
-    DEFAULT_WEIGHTS,
-    parse_config,
-)
+from evidone_pose_detection.cli import DEFAULT_CONFIDENCE, DEFAULT_WEIGHTS, parse_config
+from evidone_pose_detection.models import DEFAULT_CAMERA_INDEX
 
 
 @pytest.mark.parametrize(
@@ -13,7 +9,7 @@ from evidone_pose_detection.cli import (
     [([], DEFAULT_CAMERA_INDEX), (["--camera", "0"], 0), (["--camera", "3"], 3)],
 )
 def test_parse_config_reads_the_device_index(argv: list[str], expected: int) -> None:
-    assert parse_config(argv).camera.device_index == expected
+    assert parse_config(argv).camera.source == expected
 
 
 @pytest.mark.parametrize(

@@ -1,14 +1,23 @@
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QToolBar, QToolButton
 
 from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture, FakePoseSource, make_person
 from evidone_pose_detection.camera import Camera
 from evidone_pose_detection.models import CameraConfig, Frame, PersonPose, PoseResult
-from evidone_pose_detection.ui.window import MINIMUM_YIELD_MS, WINDOW_TITLE, VideoWindow
+from evidone_pose_detection.ui.window import (
+    CAMERA_LABEL,
+    MINIMUM_YIELD_MS,
+    SETTINGS_LABEL,
+    SOURCE_LABEL,
+    VIDEO_LABEL,
+    WINDOW_TITLE,
+    VideoWindow,
+)
 from evidone_pose_detection.vision.rendering import REGION_COLOURS
 
 InstallCapture = Callable[[FakeCapture], list[int]]
@@ -22,7 +31,7 @@ def window(
     no_poses: FakePoseSource,
 ) -> VideoWindow:
     install_capture(working_capture)
-    return VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), no_poses)
+    return VideoWindow(Camera(CameraConfig(source=0)).__enter__(), no_poses)
 
 
 def test_window_adopts_the_title_and_the_frame_size(window: VideoWindow) -> None:
@@ -43,7 +52,7 @@ def test_a_frame_the_camera_never_delivered_is_not_sent_to_the_model(
     application: QApplication, install_capture: InstallCapture, no_poses: FakePoseSource
 ) -> None:
     install_capture(FakeCapture(frames=[], opened=True, fps=25.0))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), no_poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), no_poses)
 
     window._show_next_frame()
 
@@ -59,7 +68,7 @@ def test_the_title_reports_how_many_people_were_detected(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource(tuple(make_person(0.8) for _ in range(people)))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
 
@@ -152,7 +161,7 @@ def test_a_device_that_stops_delivering_closes_the_window(
 ) -> None:
     capture = FakeCapture(frames=[], opened=True, fps=25.0)
     install_capture(capture)
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), FakePoseSource(()))
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), FakePoseSource(()))
     window.show()
     window.start()
 
@@ -167,7 +176,7 @@ def test_the_frame_shown_in_the_window_carries_the_drawn_skeleton(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource((make_person(0.8),))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
 
@@ -179,7 +188,7 @@ def test_the_model_never_sees_a_frame_we_have_drawn_on(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource((make_person(0.8),))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
     window._show_next_frame()
@@ -213,7 +222,7 @@ def test_faces_are_hidden_before_the_skeleton_is_drawn(
     monkeypatch.setattr("evidone_pose_detection.ui.window.blur_faces", record_blur)
     monkeypatch.setattr("evidone_pose_detection.ui.window.draw_poses", record_draw)
     window = VideoWindow(
-        Camera(CameraConfig(device_index=0)).__enter__(), RecordingPoses((make_person(0.8),))
+        Camera(CameraConfig(source=0)).__enter__(), RecordingPoses((make_person(0.8),))
     )
 
     window._show_next_frame()
@@ -226,7 +235,7 @@ def test_the_skeleton_stays_sharp_on_top_of_a_blurred_face(
 ) -> None:
     install_capture(working_capture)
     poses = FakePoseSource((make_person(0.8),))
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+    window = VideoWindow(Camera(CameraConfig(source=0)).__enter__(), poses)
 
     window._show_next_frame()
 
@@ -234,3 +243,185 @@ def test_the_skeleton_stays_sharp_on_top_of_a_blurred_face(
     drawn_colours = {tuple(int(c) for c in colour) for colour in REGION_COLOURS.values()}
     painted = {tuple(int(c) for c in pixel) for row in shown for pixel in row}
     assert drawn_colours & painted, "no un-smeared skeleton colour survived the blur"
+
+
+# --- toolbar and live source switching -------------------------------------------------
+
+InstallCaptures = Callable[[list[FakeCapture]], list[object]]
+CLIP = Path("clip.avi")
+
+
+def window_over(captures: list[FakeCapture], install: InstallCaptures) -> VideoWindow:
+    install(captures)
+    return VideoWindow(Camera(CameraConfig(source=0)).__enter__(), FakePoseSource(()))
+
+
+def choose_file(window: VideoWindow, chosen: str) -> list[str]:
+    reported: list[str] = []
+    window._ask_for_video_file = lambda: chosen  # type: ignore[method-assign]
+    window._report_source_error = lambda error: reported.append(str(error))  # type: ignore[method-assign]
+    window._video_action.trigger()
+    return reported
+
+
+def running(frame: Frame) -> FakeCapture:
+    return FakeCapture(frames=[frame] * 8, opened=True, fps=25.0)
+
+
+def test_the_window_has_a_toolbar_with_a_settings_button(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    toolbars = window.findChildren(QToolBar)
+    buttons = window.findChildren(QToolButton)
+
+    assert len(toolbars) == 1
+    assert window.toolBarArea(toolbars[0]) == Qt.ToolBarArea.TopToolBarArea
+    assert any(button.text() == SETTINGS_LABEL for button in buttons)
+
+
+def test_the_settings_menu_offers_a_camera_and_a_video_file(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    assert window._source_menu.title() == SOURCE_LABEL
+    labels = [action.text() for action in window._source_menu.actions()]
+    assert labels[0] == CAMERA_LABEL
+    assert labels[1].startswith(VIDEO_LABEL)
+
+
+def test_the_menu_marks_the_camera_as_the_active_source_at_startup(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    assert window._camera_action.isChecked()
+    assert not window._video_action.isChecked()
+
+
+def test_choosing_a_video_file_swaps_the_source_and_releases_the_camera(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera, clip = running(frame), running(frame)
+    window = window_over([camera, clip], install_captures)
+
+    reported = choose_file(window, str(CLIP))
+
+    assert reported == []
+    assert camera.released == 1, "the camera was left open behind the clip"
+    assert clip.released == 0
+    assert window._session.camera.config == CameraConfig(source=CLIP)
+
+
+def test_the_menu_names_the_active_video_file(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame), running(frame)], install_captures)
+
+    choose_file(window, str(CLIP))
+
+    assert window._video_action.isChecked()
+    assert not window._camera_action.isChecked()
+    assert CLIP.name in window._video_action.text()
+
+
+def test_switching_back_to_the_camera_releases_the_clip(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera, clip, again = running(frame), running(frame), running(frame)
+    window = window_over([camera, clip, again], install_captures)
+    choose_file(window, str(CLIP))
+
+    window._camera_action.trigger()
+
+    assert clip.released == 1, "the clip handle was left open"
+    assert window._camera_action.isChecked()
+    assert window._session.camera.config == CameraConfig(source=0)
+
+
+def test_cancelling_the_dialog_leaves_everything_as_it_was(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera = running(frame)
+    window = window_over([camera], install_captures)
+    before = window._session.camera
+
+    reported = choose_file(window, "")
+
+    assert reported == []
+    assert window._session.camera is before
+    assert camera.released == 0
+    assert window._camera_action.isChecked()
+    assert not window._video_action.isChecked()
+    assert window._video_action.text() == VIDEO_LABEL
+
+
+def test_a_file_that_cannot_be_opened_is_reported_and_the_source_keeps_running(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera = running(frame)
+    broken = FakeCapture(frames=[], opened=False, fps=25.0)
+    window = window_over([camera, broken], install_captures)
+
+    reported = choose_file(window, "missing.avi")
+
+    assert len(reported) == 1
+    assert "missing.avi" in reported[0]
+    assert camera.released == 0, "a bad path tore down the running source"
+    assert window._session.camera.read() is not None, "the source stopped delivering"
+    assert window._camera_action.isChecked()
+    assert not window._video_action.isChecked()
+
+
+def test_a_failed_switch_does_not_close_the_window(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over(
+        [running(frame), FakeCapture([], opened=False, fps=25.0)], install_captures
+    )
+    window.show()
+
+    choose_file(window, "missing.avi")
+
+    assert window.isVisible(), "a mistyped path closed the session"
+
+
+def test_the_frame_loop_keeps_running_on_the_new_source(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera, clip = running(frame), running(frame)
+    window = window_over([camera, clip], install_captures)
+    window.start()
+
+    choose_file(window, str(CLIP))
+    window._show_next_frame()
+
+    assert len(clip.delivered) == 1, "frames are not coming from the new source"
+    assert window._timer.isActive()
+
+
+def test_closing_after_a_swap_releases_the_source_in_use(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera, clip = running(frame), running(frame)
+    window = window_over([camera, clip], install_captures)
+    choose_file(window, str(CLIP))
+
+    window.close()
+
+    assert (camera.released, clip.released) == (1, 1), "a handle survived the close"
+
+
+def test_choosing_the_source_already_running_changes_nothing(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    camera = running(frame)
+    window = window_over([camera], install_captures)
+    before = window._session.camera
+
+    window._camera_action.trigger()
+
+    assert window._session.camera is before
+    assert camera.released == 0

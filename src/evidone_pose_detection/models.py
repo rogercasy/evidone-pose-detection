@@ -1,12 +1,18 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
+from pathlib import Path
 from types import MappingProxyType
 from typing import Protocol
 
 import cv2
 
 type Frame = cv2.typing.MatLike
+
+type CaptureSource = int | Path
+
+# The device opened unless another source is asked for.
+DEFAULT_CAMERA_INDEX = 0
 
 
 class COCOKeypoint(IntEnum):
@@ -132,7 +138,11 @@ SHOULDER_SPAN = FaceSpan(COCOKeypoint.LEFT_SHOULDER, COCOKeypoint.RIGHT_SHOULDER
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
-    device_index: int
+    source: CaptureSource
+
+    @property
+    def is_file(self) -> bool:
+        return isinstance(self.source, Path)
 
 
 @dataclass(frozen=True, slots=True)

@@ -27,6 +27,8 @@ class FakeCapture:
         self._fps = fps
         self.released = 0
         self.delivered: list[Frame] = []
+        self.rewinds = 0
+        self._original = list(frames)
 
     def isOpened(self) -> bool:
         return self._opened
@@ -48,6 +50,12 @@ class FakeCapture:
         frame = captured.copy()
         self.delivered.append(frame)
         return True, frame
+
+    def set(self, prop: int, value: float) -> bool:
+        if prop == cv2.CAP_PROP_POS_FRAMES and value == 0:
+            self.rewinds += 1
+            self._frames = list(self._original)
+        return True
 
     def release(self) -> None:
         self.released += 1
@@ -71,6 +79,27 @@ def install_capture(monkeypatch: pytest.MonkeyPatch) -> Callable[[FakeCapture], 
         def video_capture(index: int) -> FakeCapture:
             requested.append(index)
             return capture
+
+        monkeypatch.setattr("evidone_pose_detection.camera.cv2.VideoCapture", video_capture)
+        return requested
+
+    return install
+
+
+@pytest.fixture
+def install_captures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[Sequence[FakeCapture]], list[object]]:
+    """Hand out a different fake capture per cv2.VideoCapture call, in order."""
+
+    def install(captures: Sequence[FakeCapture]) -> list[object]:
+        requested: list[object] = []
+        pending = list(captures)
+
+        def video_capture(source: object) -> FakeCapture:
+            requested.append(source)
+            assert pending, "more capture sources were opened than the test provided"
+            return pending.pop(0)
 
         monkeypatch.setattr("evidone_pose_detection.camera.cv2.VideoCapture", video_capture)
         return requested
