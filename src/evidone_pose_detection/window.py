@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QLabel, QMainWindow, QSizePolicy
 
 from evidone_pose_detection.camera import Camera
 from evidone_pose_detection.models import Frame, PersonPose, PoseSource
+from evidone_pose_detection.rendering import draw_poses
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,9 @@ class VideoWindow(QMainWindow):
             self.close()
             return
 
-        self._show_people(self._poses.estimate(frame))
+        people = self._poses.estimate(frame)
+        self._show_people(people)
+        draw_poses(frame, people)
         self._view.setPixmap(
             QPixmap.fromImage(_to_image(frame)).scaled(
                 self._view.size(),

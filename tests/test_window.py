@@ -154,3 +154,29 @@ def test_a_device_that_stops_delivering_closes_the_window(
 
     assert not window.isVisible()
     assert capture.released == 1
+
+
+def test_the_frame_shown_in_the_window_carries_the_drawn_skeleton(
+    application: QApplication, working_capture: FakeCapture, install_capture: InstallCapture
+) -> None:
+    install_capture(working_capture)
+    poses = FakePoseSource((make_person(0.8),))
+    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+
+    window._show_next_frame()
+
+    assert (working_capture.delivered[-1] != 128).any()
+
+
+def test_the_model_never_sees_a_frame_we_have_drawn_on(
+    application: QApplication, working_capture: FakeCapture, install_capture: InstallCapture
+) -> None:
+    install_capture(working_capture)
+    poses = FakePoseSource((make_person(0.8),))
+    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+
+    window._show_next_frame()
+    window._show_next_frame()
+
+    assert poses.last_frame is not None
+    assert (poses.last_frame == 128).all()
