@@ -1,15 +1,11 @@
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import FaceRegion
-from evidone_pose_detection.vision.tracking import (
-    HOLD_GROWTH_PER_FRAME,
-    MATCH_DISTANCE_RATIO,
-    SMOOTHING,
-    FaceTracker,
-)
+from evidone_pose_detection.vision.tracking import FaceTracker
 
 RADIUS = 100.0
-ALLOWANCE = RADIUS * MATCH_DISTANCE_RATIO
+ALLOWANCE = RADIUS * CONFIG.tracking.match_distance_ratio
 
 # Matching and smoothing are exercised without holding; holding has its own section.
 NO_HOLDING = 0
@@ -33,7 +29,7 @@ def test_a_matched_face_is_pulled_only_part_of_the_way() -> None:
 
     (tracked,) = tracker.track([region(120.0, 100.0, RADIUS)])
 
-    assert tracked.centre_x == pytest.approx(100.0 + 20.0 * SMOOTHING)
+    assert tracked.centre_x == pytest.approx(100.0 + 20.0 * CONFIG.tracking.smoothing)
     assert 100.0 < tracked.centre_x < 120.0
 
 
@@ -43,7 +39,7 @@ def test_the_size_is_smoothed_as_well_as_the_position() -> None:
 
     (tracked,) = tracker.track([region(100.0, 100.0, RADIUS + 40.0)])
 
-    assert tracked.radius == pytest.approx(RADIUS + 40.0 * SMOOTHING)
+    assert tracked.radius == pytest.approx(RADIUS + 40.0 * CONFIG.tracking.smoothing)
 
 
 def test_a_face_that_stops_moving_settles_on_the_measurement() -> None:
@@ -68,7 +64,7 @@ def test_jitter_is_damped_rather_than_followed() -> None:
 
     travelled = abs(tracked.centre_x - 200.0)
     assert travelled < 6.0, "the tracker followed the jitter one for one"
-    assert travelled == pytest.approx(6.0 * SMOOTHING)
+    assert travelled == pytest.approx(6.0 * CONFIG.tracking.smoothing)
 
 
 def test_a_face_that_jumped_too_far_starts_again_from_the_measurement() -> None:
@@ -87,7 +83,7 @@ def test_a_face_at_the_limit_of_the_allowance_still_matches() -> None:
 
     (tracked,) = tracker.track([region(100.0 + ALLOWANCE, 100.0, RADIUS)])
 
-    assert tracked.centre_x == pytest.approx(100.0 + ALLOWANCE * SMOOTHING)
+    assert tracked.centre_x == pytest.approx(100.0 + ALLOWANCE * CONFIG.tracking.smoothing)
 
 
 @pytest.mark.parametrize(
@@ -113,7 +109,7 @@ def test_a_previous_face_can_only_be_claimed_once() -> None:
     first, second = tracker.track([near, nearer_still])
 
     # The closer of the two takes the track; the other is left to start its own.
-    assert second.centre_x == pytest.approx(100.0 + 5.0 * SMOOTHING)
+    assert second.centre_x == pytest.approx(100.0 + 5.0 * CONFIG.tracking.smoothing)
     assert first == near
 
 
@@ -123,8 +119,8 @@ def test_each_face_matches_its_own_nearest_track() -> None:
 
     left, right = tracker.track([region(110.0, 100.0, RADIUS), region(410.0, 100.0, RADIUS)])
 
-    assert left.centre_x == pytest.approx(100.0 + 10.0 * SMOOTHING)
-    assert right.centre_x == pytest.approx(400.0 + 10.0 * SMOOTHING)
+    assert left.centre_x == pytest.approx(100.0 + 10.0 * CONFIG.tracking.smoothing)
+    assert right.centre_x == pytest.approx(400.0 + 10.0 * CONFIG.tracking.smoothing)
 
 
 def test_the_order_faces_arrive_in_does_not_change_the_pairing() -> None:
@@ -150,7 +146,7 @@ def test_a_new_face_appearing_beside_a_tracked_one_is_used_as_it_comes() -> None
 
     tracked, fresh = tracker.track([region(105.0, 100.0, RADIUS), newcomer])
 
-    assert tracked.centre_x == pytest.approx(100.0 + 5.0 * SMOOTHING)
+    assert tracked.centre_x == pytest.approx(100.0 + 5.0 * CONFIG.tracking.smoothing)
     assert fresh == newcomer
 
 
@@ -242,7 +238,7 @@ def test_a_held_face_widens_because_we_no_longer_know_where_it_is() -> None:
         (held,) = tracker.track([])
         radii.append(held.radius)
 
-    assert radii[0] == pytest.approx(RADIUS * (1.0 + HOLD_GROWTH_PER_FRAME))
+    assert radii[0] == pytest.approx(RADIUS * (1.0 + CONFIG.tracking.hold_growth_per_frame))
     assert radii == sorted(radii), "the cover should not shrink while the face is lost"
     assert radii[-1] > RADIUS
 
@@ -266,7 +262,7 @@ def test_a_held_face_can_be_picked_up_again_and_is_smoothed_from_where_it_was_he
 
     (found,) = tracker.track([region(110.0, 100.0, RADIUS)])
 
-    assert found.centre_x == pytest.approx(100.0 + 10.0 * SMOOTHING)
+    assert found.centre_x == pytest.approx(100.0 + 10.0 * CONFIG.tracking.smoothing)
     assert found.centre_x != 110.0
 
 
@@ -276,7 +272,7 @@ def test_holding_one_face_does_not_disturb_another_that_is_still_seen() -> None:
 
     seen, held = tracker.track([region(105.0, 100.0, RADIUS)])
 
-    assert seen.centre_x == pytest.approx(100.0 + 5.0 * SMOOTHING)
+    assert seen.centre_x == pytest.approx(100.0 + 5.0 * CONFIG.tracking.smoothing)
     assert held.centre_x == 500.0
 
 

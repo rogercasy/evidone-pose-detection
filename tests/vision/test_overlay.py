@@ -1,13 +1,9 @@
 import numpy as np
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import Frame, FrameStats
-from evidone_pose_detection.vision.overlay import (
-    PANEL_OPACITY,
-    PANEL_ORIGIN,
-    TEXT_COLOUR,
-    draw_stats,
-)
+from evidone_pose_detection.vision.overlay import draw_stats
 
 WIDTH = 480
 HEIGHT = 320
@@ -19,7 +15,7 @@ def flat(value: int) -> Frame:
 
 
 def panel_corner(frame: Frame) -> tuple[int, int, int]:
-    left, top = PANEL_ORIGIN
+    left, top = CONFIG.panel.origin
     blue, green, red = frame[top + 2, left + 2]
     return int(blue), int(green), int(red)
 
@@ -52,7 +48,7 @@ def test_the_backdrop_keeps_a_readable_share_of_the_video() -> None:
 
     shaded = panel_corner(frame)[0]
     assert shaded < 200, "the backdrop did not darken the video"
-    assert shaded == pytest.approx(200 * (1.0 - PANEL_OPACITY), abs=30)
+    assert shaded == pytest.approx(200 * (1.0 - CONFIG.panel.alpha), abs=30)
 
 
 def test_the_three_numbers_are_written_on_the_frame() -> None:
@@ -60,7 +56,7 @@ def test_the_three_numbers_are_written_on_the_frame() -> None:
 
     draw_stats(frame, STATS)
 
-    text_pixels = int(np.count_nonzero((frame == TEXT_COLOUR).all(axis=2)))
+    text_pixels = int(np.count_nonzero((frame == CONFIG.panel.text_colour).all(axis=2)))
     assert text_pixels > 100, "no text was drawn"
 
 

@@ -1,0 +1,120 @@
+# Every tunable value the app has. Structure (the COCO skeleton, which landmarks are
+# face landmarks), framework objects and protocol values stay in the code.
+
+[camera]
+default_index = 0
+fallback_fps = 30.0
+
+[pose]
+weights = "yolo26n-pose.pt"
+confidence = 0.4
+
+[faces]
+visibility_threshold = 0.5
+landmark_coverage_margin = 1.6
+shoulder_scale = 0.35
+
+# Each span collapses at a different head angle, so the largest estimate wins.
+# The scales are deliberately generous: over-covering only blurs background.
+[[faces.spans]]
+start = "left_eye"
+end = "right_eye"
+scale = 2.0
+
+[[faces.spans]]
+start = "left_ear"
+end = "right_ear"
+scale = 0.9
+
+[[faces.spans]]
+start = "nose"
+end = "left_ear"
+scale = 1.2
+
+[[faces.spans]]
+start = "nose"
+end = "right_ear"
+scale = 1.2
+
+[[faces.spans]]
+start = "nose"
+end = "left_eye"
+scale = 2.6
+
+[[faces.spans]]
+start = "nose"
+end = "right_eye"
+scale = 2.6
+
+[[faces.spans]]
+start = "left_eye"
+end = "left_ear"
+scale = 1.8
+
+[[faces.spans]]
+start = "right_eye"
+end = "right_ear"
+scale = 1.8
+
+[tracking]
+match_distance_ratio = 0.6
+smoothing = 0.3
+hold_frames = 3
+hold_growth_per_frame = 0.12
+
+[hiding]
+default_style = "blur"
+blur_samples = 6
+pixel_blocks = 8
+fill_colour = [18, 18, 18]
+
+[skeleton]
+draw_by_default = true
+joint_radius = 4
+bone_thickness = 2
+
+[skeleton.colours]
+head = [0, 195, 255]
+torso = [255, 186, 59]
+limb = [104, 222, 122]
+
+[panel]
+origin = [12, 12]
+padding = 10
+alpha = 0.55
+colour = [24, 24, 24]
+text_colour = [240, 240, 240]
+font_scale = 0.5
+font_thickness = 1
+line_height = 20
+
+[window]
+title = "Evidone Pose Detection"
+view_background = "#101010"
+minimum_yield_ms = 1
+frame_rate_window = 15
+
+[output]
+stem = "evidone"
+fourcc = "mp4v"
+
+[labels]
+toolbar = "Main"
+settings = "Settings"
+source = "Source"
+camera = "Camera"
+video_file = "Video File…"
+hiding = "Face Hiding"
+skeleton = "Skeleton Overlay"
+record = "Record to MP4"
+detection_log = "Log Detections (JSONL)"
+file_dialog_title = "Choose a video file"
+video_file_filter = "Video files (*.mp4 *.avi *.mov *.mkv *.webm);;All files (*)"
+source_error_title = "Cannot open that source"
+recording_error_title = "Cannot record"
+log_error_title = "Cannot log detections"
+
+[labels.styles]
+blur = "Blur"
+pixelate = "Pixelate"
+fill = "Solid Fill"

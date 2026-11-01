@@ -9,24 +9,9 @@ from PySide6.QtWidgets import QApplication, QToolBar, QToolButton
 
 from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture, FakePoseSource, make_person
 from evidone_pose_detection.camera import Camera
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import CameraConfig, Frame, HideStyle, PersonPose, PoseResult
-from evidone_pose_detection.ui.window import (
-    CAMERA_LABEL,
-    HIDING_LABEL,
-    LOG_ERROR_TITLE,
-    LOG_LABEL,
-    MINIMUM_YIELD_MS,
-    RECORD_LABEL,
-    RECORDING_ERROR_TITLE,
-    SETTINGS_LABEL,
-    SKELETON_LABEL,
-    SOURCE_LABEL,
-    STYLE_LABELS,
-    VIDEO_LABEL,
-    WINDOW_TITLE,
-    VideoWindow,
-)
-from evidone_pose_detection.vision.rendering import REGION_COLOURS
+from evidone_pose_detection.ui.window import VideoWindow
 
 InstallCapture = Callable[[FakeCapture], list[int]]
 
@@ -43,7 +28,7 @@ def window(
 
 
 def test_window_adopts_the_title_and_the_frame_size(window: VideoWindow) -> None:
-    assert window.windowTitle().startswith(WINDOW_TITLE)
+    assert window.windowTitle().startswith(CONFIG.window.title)
     assert (window.width(), window.height()) == (FRAME_WIDTH, FRAME_HEIGHT)
 
 
@@ -80,7 +65,7 @@ def test_the_title_reports_how_many_people_were_detected(
 
     window._show_next_frame()
 
-    assert window.windowTitle() == f"{WINDOW_TITLE} \u2014 {people} detected"
+    assert window.windowTitle() == f"{CONFIG.window.title} \u2014 {people} detected"
 
 
 def test_start_schedules_a_single_frame_at_the_capture_rate(window: VideoWindow) -> None:
@@ -97,7 +82,7 @@ def test_each_frame_rearms_the_next_one(window: VideoWindow) -> None:
     window._show_next_frame()
 
     assert window._timer.isActive()
-    assert MINIMUM_YIELD_MS <= window._timer.interval() <= 40
+    assert CONFIG.window.minimum_yield_ms <= window._timer.interval() <= 40
 
 
 def test_a_frame_slower_than_the_capture_rate_still_yields_to_the_event_loop(
@@ -114,7 +99,7 @@ def test_a_frame_slower_than_the_capture_rate_still_yields_to_the_event_loop(
 
     window._show_next_frame()
 
-    assert window._timer.interval() == MINIMUM_YIELD_MS
+    assert window._timer.interval() == CONFIG.window.minimum_yield_ms
 
 
 def test_a_closed_window_does_not_rearm_the_frame_loop(window: VideoWindow) -> None:
@@ -248,7 +233,7 @@ def test_the_skeleton_stays_sharp_on_top_of_a_blurred_face(
     window._show_next_frame()
 
     shown = working_capture.delivered[-1]
-    drawn_colours = {tuple(int(c) for c in colour) for colour in REGION_COLOURS.values()}
+    drawn_colours = {tuple(int(c) for c in colour) for colour in CONFIG.skeleton.colours.values()}
     painted = {tuple(int(c) for c in pixel) for row in shown for pixel in row}
     assert drawn_colours & painted, "no un-smeared skeleton colour survived the blur"
 
@@ -286,7 +271,7 @@ def test_the_window_has_a_toolbar_with_a_settings_button(
 
     assert len(toolbars) == 1
     assert window.toolBarArea(toolbars[0]) == Qt.ToolBarArea.TopToolBarArea
-    assert any(button.text() == SETTINGS_LABEL for button in buttons)
+    assert any(button.text() == CONFIG.labels.settings for button in buttons)
 
 
 def test_the_settings_menu_offers_a_camera_and_a_video_file(
@@ -294,10 +279,10 @@ def test_the_settings_menu_offers_a_camera_and_a_video_file(
 ) -> None:
     window = window_over([running(frame)], install_captures)
 
-    assert window._source_menu.title() == SOURCE_LABEL
+    assert window._source_menu.title() == CONFIG.labels.source
     labels = [action.text() for action in window._source_menu.actions()]
-    assert labels[0] == CAMERA_LABEL
-    assert labels[1].startswith(VIDEO_LABEL)
+    assert labels[0] == CONFIG.labels.camera
+    assert labels[1].startswith(CONFIG.labels.video_file)
 
 
 def test_the_menu_marks_the_camera_as_the_active_source_at_startup(
@@ -363,7 +348,7 @@ def test_cancelling_the_dialog_leaves_everything_as_it_was(
     assert camera.released == 0
     assert window._camera_action.isChecked()
     assert not window._video_action.isChecked()
-    assert window._video_action.text() == VIDEO_LABEL
+    assert window._video_action.text() == CONFIG.labels.video_file
 
 
 def test_a_file_that_cannot_be_opened_is_reported_and_the_source_keeps_running(
@@ -492,7 +477,7 @@ def recording_window(
 
 
 def test_every_style_has_a_label_for_the_menu() -> None:
-    assert set(STYLE_LABELS) == set(HideStyle)
+    assert set(CONFIG.labels.styles) == set(HideStyle)
 
 
 def test_the_menu_offers_every_style(
@@ -500,9 +485,9 @@ def test_the_menu_offers_every_style(
 ) -> None:
     window = window_over([running(frame)], install_captures)
 
-    assert window._hiding_menu.title() == HIDING_LABEL
+    assert window._hiding_menu.title() == CONFIG.labels.hiding
     labels = [action.text() for action in window._hiding_menu.actions()]
-    assert labels == [STYLE_LABELS[style] for style in HideStyle]
+    assert labels == [CONFIG.labels.styles[style] for style in HideStyle]
 
 
 def test_the_app_starts_on_blur_and_says_so(
@@ -569,7 +554,7 @@ def test_the_skeleton_starts_switched_on(
 
     assert window._settings.draw_skeleton is True
     assert window._skeleton_action.isChecked()
-    assert window._skeleton_action.text() == SKELETON_LABEL
+    assert window._skeleton_action.text() == CONFIG.labels.skeleton
 
 
 def test_switching_the_skeleton_off_stops_it_being_drawn(
@@ -639,7 +624,7 @@ def test_recording_is_off_until_it_is_switched_on(
 
     assert window._recorder.is_recording is False
     assert not window._record_action.isChecked()
-    assert window._record_action.text() == RECORD_LABEL
+    assert window._record_action.text() == CONFIG.labels.record
 
 
 def test_switching_recording_on_opens_a_recording(
@@ -779,7 +764,7 @@ def test_a_recording_that_cannot_be_written_stops_and_is_reported(
 
     window._show_next_frame()
 
-    assert reported == [RECORDING_ERROR_TITLE]
+    assert reported == [CONFIG.labels.recording_error_title]
     assert window._recorder.is_recording is False
     assert not window._record_action.isChecked()
     assert window._timer.isActive() or not window._running, "the frame loop died"
@@ -803,7 +788,7 @@ def test_logging_is_off_until_it_is_switched_on(
 
     assert window._detection_log.is_logging is False
     assert not window._log_action.isChecked()
-    assert window._log_action.text() == LOG_LABEL
+    assert window._log_action.text() == CONFIG.labels.detection_log
 
 
 def test_switching_logging_on_opens_a_jsonl_file(
@@ -920,7 +905,7 @@ def test_a_log_that_cannot_be_opened_is_reported_and_stays_off(
 
     window._log_action.setChecked(True)
 
-    assert reported == [LOG_ERROR_TITLE]
+    assert reported == [CONFIG.labels.log_error_title]
     assert window._detection_log.is_logging is False
     assert not window._log_action.isChecked()
 

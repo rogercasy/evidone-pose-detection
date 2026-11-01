@@ -1,10 +1,8 @@
 import argparse
 from collections.abc import Sequence
 
-from evidone_pose_detection.models import DEFAULT_CAMERA_INDEX, AppConfig, CameraConfig, PoseConfig
-
-DEFAULT_CONFIDENCE = 0.4
-DEFAULT_WEIGHTS = "yolo26n-pose.pt"
+from evidone_pose_detection.config import CONFIG
+from evidone_pose_detection.models import AppConfig, CameraConfig, PoseConfig
 
 
 def parse_config(argv: Sequence[str]) -> AppConfig:
@@ -14,21 +12,21 @@ def parse_config(argv: Sequence[str]) -> AppConfig:
     parser.add_argument(
         "--camera",
         type=int,
-        default=DEFAULT_CAMERA_INDEX,
+        default=CONFIG.camera.default_index,
         metavar="INDEX",
         help="index of the capture device to open (default: %(default)s)",
     )
     parser.add_argument(
         "--confidence",
         type=_confidence,
-        default=DEFAULT_CONFIDENCE,
+        default=CONFIG.pose.confidence,
         metavar="SCORE",
         help="minimum detection score, between 0 and 1 (default: %(default)s)",
     )
     arguments = parser.parse_args(argv)
     return AppConfig(
         camera=CameraConfig(source=arguments.camera),
-        pose=PoseConfig(weights=DEFAULT_WEIGHTS, confidence=arguments.confidence),
+        pose=PoseConfig(weights=CONFIG.pose.weights, confidence=arguments.confidence),
     )
 
 

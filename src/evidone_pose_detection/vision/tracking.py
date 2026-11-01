@@ -2,12 +2,8 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import FaceRegion
-
-MATCH_DISTANCE_RATIO = 0.6
-SMOOTHING = 0.3
-DEFAULT_HOLD_FRAMES = 3
-HOLD_GROWTH_PER_FRAME = 0.12
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +59,7 @@ def _candidates(
     for new_index, region in enumerate(regions):
         for old_index, old in enumerate(previous):
             distance = math.hypot(region.centre_x - old.centre_x, region.centre_y - old.centre_y)
-            if distance <= max(region.radius, old.radius) * MATCH_DISTANCE_RATIO:
+            if distance <= max(region.radius, old.radius) * CONFIG.tracking.match_distance_ratio:
                 near.append((distance, new_index, old_index))
     return near
 
@@ -72,7 +68,7 @@ def _held(track: _Track) -> _Track:
     widened = FaceRegion(
         centre_x=track.region.centre_x,
         centre_y=track.region.centre_y,
-        radius=track.region.radius * (1.0 + HOLD_GROWTH_PER_FRAME),
+        radius=track.region.radius * (1.0 + CONFIG.tracking.hold_growth_per_frame),
     )
     return _Track(widened, held_frames=track.held_frames + 1)
 
@@ -86,4 +82,4 @@ def _smoothed(previous: FaceRegion, measured: FaceRegion) -> FaceRegion:
 
 
 def _towards(previous: float, measured: float) -> float:
-    return previous + (measured - previous) * SMOOTHING
+    return previous + (measured - previous) * CONFIG.tracking.smoothing

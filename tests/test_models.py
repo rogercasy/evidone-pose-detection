@@ -1,8 +1,7 @@
 import pytest
 
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.models import (
-    DEFAULT_DRAW_SKELETON,
-    DEFAULT_HIDE_STYLE,
     KEYPOINT_REGIONS,
     SKELETON,
     CaptureProperties,
@@ -63,15 +62,15 @@ def test_every_keypoint_belongs_to_a_region(name: COCOKeypoint) -> None:
 
 
 def test_the_app_starts_on_blur_with_the_skeleton_drawn() -> None:
-    settings = ViewSettings.defaults()
+    settings = _starting_settings()
 
     assert settings.hide_style is HideStyle.BLUR
-    assert settings.hide_style is DEFAULT_HIDE_STYLE
-    assert settings.draw_skeleton is DEFAULT_DRAW_SKELETON is True
+    assert settings.hide_style is CONFIG.hiding.default_style
+    assert settings.draw_skeleton is CONFIG.skeleton.draw_by_default is True
 
 
 def test_settings_are_edited_in_place_so_a_reader_sees_the_change() -> None:
-    settings = ViewSettings.defaults()
+    settings = _starting_settings()
     seen_by_the_loop = settings
 
     settings.hide_style = HideStyle.FILL
@@ -82,9 +81,15 @@ def test_settings_are_edited_in_place_so_a_reader_sees_the_change() -> None:
 
 
 def test_each_set_of_defaults_is_independent() -> None:
-    first = ViewSettings.defaults()
-    second = ViewSettings.defaults()
+    first = _starting_settings()
+    second = _starting_settings()
 
     first.hide_style = HideStyle.PIXELATE
 
     assert second.hide_style is HideStyle.BLUR
+
+
+def _starting_settings() -> ViewSettings:
+    return ViewSettings(
+        hide_style=CONFIG.hiding.default_style, draw_skeleton=CONFIG.skeleton.draw_by_default
+    )

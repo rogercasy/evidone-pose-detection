@@ -1,9 +1,8 @@
 import logging
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from types import MappingProxyType
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QActionGroup, QCloseEvent, QImage, QKeyEvent, QPixmap
@@ -19,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from evidone_pose_detection.camera import Camera, CaptureSession
+from evidone_pose_detection.config import CONFIG
 from evidone_pose_detection.detection_log import DetectionLog
 from evidone_pose_detection.errors import (
     CameraOpenError,
@@ -27,7 +27,6 @@ from evidone_pose_detection.errors import (
     RecordingError,
 )
 from evidone_pose_detection.models import (
-    DEFAULT_CAMERA_INDEX,
     CameraConfig,
     Frame,
     FrameStats,
@@ -45,37 +44,10 @@ from evidone_pose_detection.vision import (
     face_regions,
     hide_faces,
 )
-from evidone_pose_detection.vision.tracking import DEFAULT_HOLD_FRAMES
 
 logger = logging.getLogger(__name__)
 
-WINDOW_TITLE = "Evidone Pose Detection"
 QUIT_KEYS = frozenset({Qt.Key.Key_Q, Qt.Key.Key_Escape})
-MINIMUM_YIELD_MS = 1
-
-FRAME_RATE_WINDOW = 15
-
-TOOLBAR_TITLE = "Main"
-SETTINGS_LABEL = "Settings"
-SOURCE_LABEL = "Source"
-CAMERA_LABEL = "Camera"
-VIDEO_LABEL = "Video File\u2026"
-HIDING_LABEL = "Face Hiding"
-SKELETON_LABEL = "Skeleton Overlay"
-RECORD_LABEL = "Record to MP4"
-LOG_LABEL = "Log Detections (JSONL)"
-LOG_ERROR_TITLE = "Cannot log detections"
-RECORDING_ERROR_TITLE = "Cannot record"
-OUTPUT_STEM = "evidone"
-
-STYLE_LABELS: Mapping[HideStyle, str] = MappingProxyType(
-    {HideStyle.BLUR: "Blur", HideStyle.PIXELATE: "Pixelate", HideStyle.FILL: "Solid Fill"}
-)
-FILE_DIALOG_TITLE = "Choose a video file"
-VIDEO_FILE_FILTER = "Video files (*.mp4 *.avi *.mov *.mkv *.webm);;All files (*)"
-SOURCE_ERROR_TITLE = "Cannot open that source"
-
-VIEW_BACKGROUND = "#101010"
 
 
 class VideoWindow(QMainWindow):
@@ -85,10 +57,12 @@ class VideoWindow(QMainWindow):
         self._session = CaptureSession(camera)
         self._poses = poses
         self._people: tuple[PersonPose, ...] = ()
-        self._frame_rate = FrameRate(FRAME_RATE_WINDOW)
+        self._frame_rate = FrameRate(CONFIG.window.frame_rate_window)
         self._camera_index = _starting_camera_index(camera.config)
-        self._tracker = FaceTracker(hold_frames=DEFAULT_HOLD_FRAMES)
-        self._settings = ViewSettings.defaults()
+        self._tracker = FaceTracker(hold_frames=CONFIG.tracking.hold_frames)
+        self._settings = ViewSettings(
+            hide_style=CONFIG.hiding.default_style, draw_skeleton=CONFIG.skeleton.draw_by_default
+        )
         self._recorder = Recorder()
         self._detection_log = DetectionLog()
         self._replays = camera.replays
@@ -166,7 +140,7 @@ class VideoWindow(QMainWindow):
         if not self._running:
             return
         elapsed_ms = round((time.perf_counter() - started) * 1000)
-        self._timer.start(max(MINIMUM_YIELD_MS, self._interval_ms - elapsed_ms))
+        self._timer.start(max(CONFIG.window.minimum_yield_ms, self._interval_ms - elapsed_ms))
 
     def _forget_tracks_across_a_replay(self) -> None:
         replays = self._session.camera.replays
@@ -192,7 +166,7 @@ class VideoWindow(QMainWindow):
             camera = self._session.switch_to(config)
         except CameraOpenError as error:
             logger.warning("Keeping the running source: %s", error)
-            self._report(SOURCE_ERROR_TITLE, error)
+            self._report(CONFIG.labels.source_error_title, error)
             self._mark_active_source()
             return
 
@@ -205,7 +179,9 @@ class VideoWindow(QMainWindow):
         logger.info("Switched the source to %s", config.source)
 
     def _ask_for_video_file(self) -> str:
-        chosen, _ = QFileDialog.getOpenFileName(self, FILE_DIALOG_TITLE, "", VIDEO_FILE_FILTER)
+        chosen, _ = QFileDialog.getOpenFileName(
+            self, CONFIG.labels.file_dialog_title, "", CONFIG.labels.video_file_filter
+        )
         return chosen
 
     def _report(self, title: str, error: EvidoneError) -> None:
@@ -243,7 +219,7 @@ class VideoWindow(QMainWindow):
             self._detection_log.start(_detection_log_path())
         except DetectionLogError as error:
             logger.warning("Detection logging did not start: %s", error)
-            self._report(LOG_ERROR_TITLE, error)
+            self._report(CONFIG.labels.log_error_title, error)
         self._mark_active_view()
 
     def _stop_logging(self) -> None:
@@ -256,7 +232,7 @@ class VideoWindow(QMainWindow):
         except RecordingError as error:
             logger.warning("Recording stopped: %s", error)
             self._stop_recording()
-            self._report(RECORDING_ERROR_TITLE, error)
+            self._report(CONFIG.labels.recording_error_title, error)
 
     def _toggle_skeleton(self, drawn: bool) -> None:
         self._settings.draw_skeleton = drawn
@@ -276,25 +252,25 @@ class VideoWindow(QMainWindow):
         self._video_action.setText(_video_label(config))
 
     def _build_toolbar(self) -> None:
-        toolbar = QToolBar(TOOLBAR_TITLE, self)
+        toolbar = QToolBar(CONFIG.labels.toolbar, self)
         toolbar.setMovable(False)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
         button = QToolButton(toolbar)
-        button.setText(SETTINGS_LABEL)
+        button.setText(CONFIG.labels.settings)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setMenu(self._build_settings_menu())
         toolbar.addWidget(button)
         self._settings_button = button
 
     def _build_settings_menu(self) -> QMenu:
-        menu = QMenu(SETTINGS_LABEL, self)
-        self._source_menu = menu.addMenu(SOURCE_LABEL)
+        menu = QMenu(CONFIG.labels.settings, self)
+        self._source_menu = menu.addMenu(CONFIG.labels.source)
 
         group = QActionGroup(self)
         group.setExclusive(True)
-        self._camera_action = self._source_menu.addAction(CAMERA_LABEL)
-        self._video_action = self._source_menu.addAction(VIDEO_LABEL)
+        self._camera_action = self._source_menu.addAction(CONFIG.labels.camera)
+        self._video_action = self._source_menu.addAction(CONFIG.labels.video_file)
         for action in (self._camera_action, self._video_action):
             action.setCheckable(True)
             group.addAction(action)
@@ -303,27 +279,27 @@ class VideoWindow(QMainWindow):
 
         self._build_hiding_menu(menu)
         menu.addSeparator()
-        self._skeleton_action = menu.addAction(SKELETON_LABEL)
+        self._skeleton_action = menu.addAction(CONFIG.labels.skeleton)
         self._skeleton_action.setCheckable(True)
         self._skeleton_action.toggled.connect(self._toggle_skeleton)
 
         menu.addSeparator()
-        self._record_action = menu.addAction(RECORD_LABEL)
+        self._record_action = menu.addAction(CONFIG.labels.record)
         self._record_action.setCheckable(True)
         self._record_action.toggled.connect(self._set_recording)
 
-        self._log_action = menu.addAction(LOG_LABEL)
+        self._log_action = menu.addAction(CONFIG.labels.detection_log)
         self._log_action.setCheckable(True)
         self._log_action.toggled.connect(self._set_logging)
         return menu
 
     def _build_hiding_menu(self, menu: QMenu) -> None:
-        self._hiding_menu = menu.addMenu(HIDING_LABEL)
+        self._hiding_menu = menu.addMenu(CONFIG.labels.hiding)
         styles = QActionGroup(self)
         styles.setExclusive(True)
         self._style_actions = {}
         for style in HideStyle:
-            action = self._hiding_menu.addAction(STYLE_LABELS[style])
+            action = self._hiding_menu.addAction(CONFIG.labels.styles[style])
             action.setCheckable(True)
             styles.addAction(action)
             action.triggered.connect(self._style_chooser(style))
@@ -345,7 +321,7 @@ def _detection_log_path() -> Path:
 
 def _output_path(suffix: str) -> Path:
     stamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
-    return Path(f"{OUTPUT_STEM}-{stamp}{suffix}")
+    return Path(f"{CONFIG.output.stem}-{stamp}{suffix}")
 
 
 def _frames_per_second(interval_ms: int) -> float:
@@ -354,23 +330,23 @@ def _frames_per_second(interval_ms: int) -> float:
 
 def _starting_camera_index(config: CameraConfig) -> int:
     source = config.source
-    return source if isinstance(source, int) else DEFAULT_CAMERA_INDEX
+    return source if isinstance(source, int) else CONFIG.camera.default_index
 
 
 def _video_label(config: CameraConfig) -> str:
     source = config.source
     if isinstance(source, Path):
-        return f"{VIDEO_LABEL} ({source.name})"
-    return VIDEO_LABEL
+        return f"{CONFIG.labels.video_file} ({source.name})"
+    return CONFIG.labels.video_file
 
 
 def _title(people: int) -> str:
-    return f"{WINDOW_TITLE} — {people} detected"
+    return f"{CONFIG.window.title} — {people} detected"
 
 
 def _build_view() -> QLabel:
     view = QLabel()
-    view.setStyleSheet(f"background-color: {VIEW_BACKGROUND};")
+    view.setStyleSheet(f"background-color: {CONFIG.window.view_background};")
     view.setAlignment(Qt.AlignmentFlag.AlignCenter)
     view.setMinimumSize(1, 1)
     view.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
