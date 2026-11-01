@@ -1,6 +1,6 @@
 [project]
 name = "evidone_pose_detection"
-version = "0.1.4-beta0"
+version = "0.1.4"
 description = "Real-Time Pose Detection with Face Anonymization"
 readme = "README.md"
 requires-python = ">=3.12"
