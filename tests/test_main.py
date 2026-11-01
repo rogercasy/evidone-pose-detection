@@ -3,13 +3,14 @@ from collections.abc import Callable, Sequence
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from conftest import FakeCapture
+from conftest import FakeCapture, FakePoseSource
 from evidone_pose_detection import main as main_module
-from evidone_pose_detection.errors import CameraOpenError
-from evidone_pose_detection.main import CAMERA_ERROR_EXIT_CODE, main, run
-from evidone_pose_detection.models import CameraConfig
+from evidone_pose_detection.errors import CameraOpenError, PoseModelError
+from evidone_pose_detection.main import STARTUP_ERROR_EXIT_CODE, main, run
+from evidone_pose_detection.models import AppConfig, CameraConfig, PoseConfig
 
 InstallCapture = Callable[[FakeCapture], list[int]]
+WEIGHTS = "yolo26n-pose.pt"
 
 
 class FakeApplication:
@@ -19,6 +20,21 @@ class FakeApplication:
 
     def exec(self) -> int:
         return self._exit_code
+
+
+def config_for(device_index: int) -> AppConfig:
+    return AppConfig(
+        camera=CameraConfig(device_index=device_index),
+        pose=PoseConfig(weights=WEIGHTS, confidence=0.4),
+    )
+
+
+def raise_camera_open_error(config: AppConfig) -> int:
+    raise CameraOpenError(config.camera.device_index)
+
+
+def raise_pose_model_error(config: AppConfig) -> int:
+    raise PoseModelError(config.pose.weights)
 
 
 @pytest.mark.parametrize("exit_code", [0, 1])
@@ -33,20 +49,43 @@ def test_run_releases_the_device_once_the_event_loop_ends(
     monkeypatch.setattr(
         main_module, "QApplication", lambda argv: FakeApplication(argv, exit_code=exit_code)
     )
+    monkeypatch.setattr(main_module, "PoseEstimator", lambda config: FakePoseSource(()))
 
-    assert run(CameraConfig(device_index=0)) == exit_code
+    assert run(config_for(0)) == exit_code
     assert working_capture.released == 1
 
 
-@pytest.mark.parametrize(
-    ("argv", "expected"), [(["evidone"], 0), (["evidone", "--camera", "2"], 2)]
-)
-def test_main_passes_the_requested_device_to_the_video_loop(
-    monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: int
+def test_run_loads_the_pose_model_before_the_event_loop_starts(
+    application: QApplication,
+    working_capture: FakeCapture,
+    install_capture: InstallCapture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    opened: list[CameraConfig] = []
+    install_capture(working_capture)
+    loaded: list[PoseConfig] = []
 
-    def record(config: CameraConfig) -> int:
+    def load(config: PoseConfig) -> FakePoseSource:
+        loaded.append(config)
+        return FakePoseSource(())
+
+    monkeypatch.setattr(main_module, "QApplication", lambda argv: FakeApplication(argv, 0))
+    monkeypatch.setattr(main_module, "PoseEstimator", load)
+
+    run(config_for(0))
+
+    assert loaded == [PoseConfig(weights=WEIGHTS, confidence=0.4)]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [(["evidone"], config_for(0)), (["evidone", "--camera", "2"], config_for(2))],
+)
+def test_main_passes_the_parsed_configuration_to_the_video_loop(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: AppConfig
+) -> None:
+    opened: list[AppConfig] = []
+
+    def record(config: AppConfig) -> int:
         opened.append(config)
         return 0
 
@@ -54,17 +93,14 @@ def test_main_passes_the_requested_device_to_the_video_loop(
     monkeypatch.setattr(main_module, "run", record)
 
     assert main() == 0
-    assert opened == [CameraConfig(device_index=expected)]
+    assert opened == [expected]
 
 
-def test_main_reports_an_unavailable_camera_instead_of_crashing(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("failure", [raise_camera_open_error, raise_pose_model_error])
+def test_main_reports_a_failed_startup_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch, failure: Callable[[AppConfig], int]
 ) -> None:
     monkeypatch.setattr("sys.argv", ["evidone"])
-    monkeypatch.setattr(main_module, "run", _raise_camera_open_error)
+    monkeypatch.setattr(main_module, "run", failure)
 
-    assert main() == CAMERA_ERROR_EXIT_CODE
-
-
-def _raise_camera_open_error(config: CameraConfig) -> int:
-    raise CameraOpenError(config.device_index)
+    assert main() == STARTUP_ERROR_EXIT_CODE

@@ -5,28 +5,30 @@ from PySide6.QtWidgets import QApplication
 
 from evidone_pose_detection.camera import Camera
 from evidone_pose_detection.cli import parse_config
-from evidone_pose_detection.errors import CameraOpenError
-from evidone_pose_detection.models import CameraConfig
+from evidone_pose_detection.errors import CameraOpenError, PoseModelError
+from evidone_pose_detection.models import AppConfig
+from evidone_pose_detection.pose import PoseEstimator
 from evidone_pose_detection.window import VideoWindow
 
 logger = logging.getLogger(__name__)
 
-CAMERA_ERROR_EXIT_CODE = 2
+STARTUP_ERROR_EXIT_CODE = 2
 
 
 def main() -> int:
     config = parse_config(sys.argv[1:])
     try:
         return run(config)
-    except CameraOpenError:
+    except (CameraOpenError, PoseModelError):
         logger.exception("Cannot start the video loop")
-        return CAMERA_ERROR_EXIT_CODE
+        return STARTUP_ERROR_EXIT_CODE
 
 
-def run(config: CameraConfig) -> int:
+def run(config: AppConfig) -> int:
     application = QApplication([])
-    with Camera(config) as camera:
-        window = VideoWindow(camera)
+    estimator = PoseEstimator(config.pose)
+    with Camera(config.camera) as camera:
+        window = VideoWindow(camera, estimator)
         window.show()
         window.start()
         return application.exec()
