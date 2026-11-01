@@ -187,5 +187,29 @@ class PersonPose:
         return self.keypoints[name]
 
 
+@dataclass(frozen=True, slots=True)
+class InferenceTiming:
+    preprocess_ms: float
+    inference_ms: float
+    postprocess_ms: float
+
+    @property
+    def total_ms(self) -> float:
+        return self.preprocess_ms + self.inference_ms + self.postprocess_ms
+
+
+@dataclass(frozen=True, slots=True)
+class PoseResult:
+    people: tuple[PersonPose, ...]
+    timing: InferenceTiming
+
+
+@dataclass(frozen=True, slots=True)
+class FrameStats:
+    inference_ms: float
+    frames_per_second: float
+    people: int
+
+
 class PoseSource(Protocol):
-    def estimate(self, frame: Frame) -> tuple[PersonPose, ...]: ...
+    def estimate(self, frame: Frame) -> PoseResult: ...

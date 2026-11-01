@@ -6,14 +6,18 @@ from PySide6.QtGui import QCloseEvent, QImage, QKeyEvent, QPixmap
 from PySide6.QtWidgets import QLabel, QMainWindow, QSizePolicy
 
 from evidone_pose_detection.camera import Camera
-from evidone_pose_detection.models import Frame, PersonPose, PoseSource
-from evidone_pose_detection.vision import blur_faces, draw_poses
+from evidone_pose_detection.models import Frame, FrameStats, PersonPose, PoseSource
+from evidone_pose_detection.ui.framerate import FrameRate
+from evidone_pose_detection.vision import blur_faces, draw_poses, draw_stats
 
 logger = logging.getLogger(__name__)
 
 WINDOW_TITLE = "Evidone Pose Detection"
 QUIT_KEYS = frozenset({Qt.Key.Key_Q, Qt.Key.Key_Escape})
 MINIMUM_YIELD_MS = 1
+
+# Frames averaged for the displayed rate, so the number is steady enough to read.
+FRAME_RATE_WINDOW = 15
 
 
 class VideoWindow(QMainWindow):
@@ -23,6 +27,7 @@ class VideoWindow(QMainWindow):
         self._camera = camera
         self._poses = poses
         self._people: tuple[PersonPose, ...] = ()
+        self._frame_rate = FrameRate(FRAME_RATE_WINDOW)
         self._view = _build_view()
         self._interval_ms = properties.frame_interval_ms
         self._running = False
@@ -58,10 +63,18 @@ class VideoWindow(QMainWindow):
             self.close()
             return
 
-        people = self._poses.estimate(frame)
-        self._show_people(people)
-        blur_faces(frame, people)
-        draw_poses(frame, people)
+        result = self._poses.estimate(frame)
+        self._show_people(result.people)
+        blur_faces(frame, result.people)
+        draw_poses(frame, result.people)
+        draw_stats(
+            frame,
+            FrameStats(
+                inference_ms=result.timing.inference_ms,
+                frames_per_second=self._frame_rate.tick(time.perf_counter()),
+                people=len(result.people),
+            ),
+        )
         self._view.setPixmap(
             QPixmap.fromImage(_to_image(frame)).scaled(
                 self._view.size(),

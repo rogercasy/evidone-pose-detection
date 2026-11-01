@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication
 
 from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture, FakePoseSource, make_person
 from evidone_pose_detection.camera import Camera
-from evidone_pose_detection.models import CameraConfig, Frame, PersonPose
+from evidone_pose_detection.models import CameraConfig, Frame, PersonPose, PoseResult
 from evidone_pose_detection.ui.window import MINIMUM_YIELD_MS, WINDOW_TITLE, VideoWindow
 from evidone_pose_detection.vision.rendering import REGION_COLOURS
 
@@ -87,8 +87,13 @@ def test_a_frame_slower_than_the_capture_rate_still_yields_to_the_event_loop(
     window: VideoWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     window.start()
-    clock = iter([0.0, 10.0])
-    monkeypatch.setattr("evidone_pose_detection.ui.window.time.perf_counter", lambda: next(clock))
+    calls = iter(range(1000))
+
+    def clock() -> float:
+        # Zero when the frame starts, ten seconds later for every reading after that.
+        return 0.0 if next(calls) == 0 else 10.0
+
+    monkeypatch.setattr("evidone_pose_detection.ui.window.time.perf_counter", clock)
 
     window._show_next_frame()
 
@@ -193,7 +198,7 @@ def test_faces_are_hidden_before_the_skeleton_is_drawn(
     order: list[str] = []
 
     class RecordingPoses(FakePoseSource):
-        def estimate(self, frame: Frame) -> tuple[PersonPose, ...]:
+        def estimate(self, frame: Frame) -> PoseResult:
             order.append("estimate")
             return super().estimate(frame)
 
