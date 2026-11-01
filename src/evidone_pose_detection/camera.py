@@ -29,7 +29,11 @@ class Camera:
         self.release()
 
     def open(self) -> None:
-        capture = cv2.VideoCapture(self._config.device_index)
+        try:
+            capture = cv2.VideoCapture(self._config.device_index)
+        except Exception as error:
+            raise CameraOpenError(self._config.device_index) from error
+
         if not capture.isOpened():
             capture.release()
             raise CameraOpenError(self._config.device_index)
