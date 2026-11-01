@@ -3,7 +3,6 @@ from collections.abc import Mapping
 
 import pytest
 
-from evidone_pose_detection.faces import LANDMARK_COVERAGE_MARGIN, face_region
 from evidone_pose_detection.models import (
     FACE_LANDMARKS,
     FACE_SPANS,
@@ -15,6 +14,7 @@ from evidone_pose_detection.models import (
     Keypoint,
     PersonPose,
 )
+from evidone_pose_detection.vision.faces import LANDMARK_COVERAGE_MARGIN, face_region
 
 SEEN = 0.9
 UNSEEN = VISIBILITY_THRESHOLD - 0.01

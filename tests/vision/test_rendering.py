@@ -10,7 +10,7 @@ from evidone_pose_detection.models import (
     Keypoint,
     PersonPose,
 )
-from evidone_pose_detection.rendering import REGION_COLOURS, draw_poses
+from evidone_pose_detection.vision.rendering import REGION_COLOURS, draw_poses
 
 WIDTH = 200
 HEIGHT = 160
