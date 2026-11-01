@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from evidone_pose_detection.models import Frame
+from evidone_pose_detection.models import KEYPOINT_COUNT, BoundingBox, Frame, Keypoint, PersonPose
 
 FRAME_WIDTH = 64
 FRAME_HEIGHT = 48
@@ -68,3 +68,29 @@ def application() -> QApplication:
     if isinstance(existing, QApplication):
         return existing
     return QApplication([])
+
+
+def make_person(confidence: float) -> PersonPose:
+    return PersonPose(
+        box=BoundingBox(left=10.0, top=20.0, right=110.0, bottom=220.0),
+        confidence=confidence,
+        keypoints=tuple(
+            Keypoint(x=float(index), y=float(index * 2), confidence=0.9)
+            for index in range(KEYPOINT_COUNT)
+        ),
+    )
+
+
+class FakePoseSource:
+    def __init__(self, people: tuple[PersonPose, ...]) -> None:
+        self._people = people
+        self.seen_frames = 0
+
+    def estimate(self, frame: Frame) -> tuple[PersonPose, ...]:
+        self.seen_frames += 1
+        return self._people
+
+
+@pytest.fixture
+def no_poses() -> FakePoseSource:
+    return FakePoseSource(())

@@ -5,32 +5,102 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
-from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture
+from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture, FakePoseSource, make_person
 from evidone_pose_detection.camera import Camera
 from evidone_pose_detection.models import CameraConfig
-from evidone_pose_detection.window import WINDOW_TITLE, VideoWindow
+from evidone_pose_detection.window import MINIMUM_YIELD_MS, WINDOW_TITLE, VideoWindow
 
 InstallCapture = Callable[[FakeCapture], list[int]]
 
 
 @pytest.fixture
 def window(
-    application: QApplication, working_capture: FakeCapture, install_capture: InstallCapture
+    application: QApplication,
+    working_capture: FakeCapture,
+    install_capture: InstallCapture,
+    no_poses: FakePoseSource,
 ) -> VideoWindow:
     install_capture(working_capture)
-    return VideoWindow(Camera(CameraConfig(device_index=0)).__enter__())
+    return VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), no_poses)
 
 
 def test_window_adopts_the_title_and_the_frame_size(window: VideoWindow) -> None:
-    assert window.windowTitle() == WINDOW_TITLE
+    assert window.windowTitle().startswith(WINDOW_TITLE)
     assert (window.width(), window.height()) == (FRAME_WIDTH, FRAME_HEIGHT)
 
 
-def test_start_schedules_frames_at_the_capture_rate(window: VideoWindow) -> None:
+def test_every_captured_frame_is_sent_to_the_pose_model(
+    window: VideoWindow, no_poses: FakePoseSource
+) -> None:
+    for _ in range(3):
+        window._show_next_frame()
+
+    assert no_poses.seen_frames == 3
+
+
+def test_a_frame_the_camera_never_delivered_is_not_sent_to_the_model(
+    application: QApplication, install_capture: InstallCapture, no_poses: FakePoseSource
+) -> None:
+    install_capture(FakeCapture(frames=[], opened=True, fps=25.0))
+    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), no_poses)
+
+    window._show_next_frame()
+
+    assert no_poses.seen_frames == 0
+
+
+@pytest.mark.parametrize("people", [0, 1, 4])
+def test_the_title_reports_how_many_people_were_detected(
+    application: QApplication,
+    working_capture: FakeCapture,
+    install_capture: InstallCapture,
+    people: int,
+) -> None:
+    install_capture(working_capture)
+    poses = FakePoseSource(tuple(make_person(0.8) for _ in range(people)))
+    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+
+    window._show_next_frame()
+
+    assert window.windowTitle() == f"{WINDOW_TITLE} \u2014 {people} detected"
+
+
+def test_start_schedules_a_single_frame_at_the_capture_rate(window: VideoWindow) -> None:
     window.start()
 
     assert window._timer.isActive()
+    assert window._timer.isSingleShot()
     assert window._timer.interval() == 40
+
+
+def test_each_frame_rearms_the_next_one(window: VideoWindow) -> None:
+    window.start()
+
+    window._show_next_frame()
+
+    assert window._timer.isActive()
+    assert MINIMUM_YIELD_MS <= window._timer.interval() <= 40
+
+
+def test_a_frame_slower_than_the_capture_rate_still_yields_to_the_event_loop(
+    window: VideoWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window.start()
+    clock = iter([0.0, 10.0])
+    monkeypatch.setattr("evidone_pose_detection.window.time.perf_counter", lambda: next(clock))
+
+    window._show_next_frame()
+
+    assert window._timer.interval() == MINIMUM_YIELD_MS
+
+
+def test_a_closed_window_does_not_rearm_the_frame_loop(window: VideoWindow) -> None:
+    window.start()
+    window.close()
+
+    window._schedule_next_frame(started=0.0)
+
+    assert not window._timer.isActive()
 
 
 def test_a_captured_frame_fills_the_view_without_distortion(window: VideoWindow) -> None:
@@ -76,7 +146,7 @@ def test_a_device_that_stops_delivering_closes_the_window(
 ) -> None:
     capture = FakeCapture(frames=[], opened=True, fps=25.0)
     install_capture(capture)
-    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__())
+    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), FakePoseSource(()))
     window.show()
     window.start()
 
