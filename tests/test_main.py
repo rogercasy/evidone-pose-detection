@@ -15,6 +15,7 @@ from evidone_pose_detection.main import (
     run,
 )
 from evidone_pose_detection.models import AppConfig, CameraConfig, PoseConfig
+from evidone_pose_detection.ui import VideoWindow
 
 InstallCapture = Callable[[FakeCapture], list[int]]
 WEIGHTS = "yolo26n-pose.pt"
@@ -192,3 +193,31 @@ def test_run_builds_the_window_once_both_are_in_hand(
 
     assert run(camera, FakePoseSource(())) == 0
     assert len(built_applications) == 1
+
+
+def test_a_crashing_event_loop_still_shuts_the_window_down(
+    application: QApplication,
+    working_capture: FakeCapture,
+    install_capture: InstallCapture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExplodingApplication:
+        def __init__(self, argv: Sequence[str]) -> None:
+            self.argv = argv
+
+        def exec(self) -> int:
+            message = "the event loop fell over"
+            raise RuntimeError(message)
+
+    shutdowns: list[bool] = []
+    install_capture(working_capture)
+    monkeypatch.setattr(main_module, "QApplication", ExplodingApplication)
+    monkeypatch.setattr(main_module, "PoseEstimator", lambda config: FakePoseSource(()))
+    monkeypatch.setattr(VideoWindow, "shutdown", lambda self: shutdowns.append(True))
+    monkeypatch.setattr("sys.argv", ["evidone"])
+
+    with pytest.raises(RuntimeError):
+        main()
+
+    assert shutdowns == [True], "the window was never shut down"
+    assert working_capture.released == 1, "the source was left open"

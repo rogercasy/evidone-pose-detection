@@ -221,3 +221,7 @@ __marimo__/
 
 # Model weights are downloaded on first run, never committed.
 *.pt
+
+# Recordings are produced at runtime, never committed.
+*.mp4
+*.jsonl
