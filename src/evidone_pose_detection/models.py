@@ -31,11 +31,27 @@ class COCOKeypoint(IntEnum):
 
 KEYPOINT_COUNT = len(COCOKeypoint)
 
+VISIBILITY_THRESHOLD = 0.5
+
 
 class BodyRegion(StrEnum):
     HEAD = "head"
     TORSO = "torso"
     LIMB = "limb"
+
+
+@dataclass(frozen=True, slots=True)
+class FaceSpan:
+    start: COCOKeypoint
+    end: COCOKeypoint
+    radius_scale: float
+
+
+@dataclass(frozen=True, slots=True)
+class FaceRegion:
+    centre_x: float
+    centre_y: float
+    radius: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +105,30 @@ SKELETON: tuple[Bone, ...] = (
     Bone(COCOKeypoint.RIGHT_KNEE, COCOKeypoint.RIGHT_ANKLE, BodyRegion.LIMB),
 )
 
+FACE_LANDMARKS: tuple[COCOKeypoint, ...] = (
+    COCOKeypoint.NOSE,
+    COCOKeypoint.LEFT_EYE,
+    COCOKeypoint.RIGHT_EYE,
+    COCOKeypoint.LEFT_EAR,
+    COCOKeypoint.RIGHT_EAR,
+)
+
+# Each span collapses at a different head angle, so the largest estimate wins.
+# The scales are deliberately generous: over-covering only blurs background.
+FACE_SPANS: tuple[FaceSpan, ...] = (
+    FaceSpan(COCOKeypoint.LEFT_EYE, COCOKeypoint.RIGHT_EYE, 2.0),
+    FaceSpan(COCOKeypoint.LEFT_EAR, COCOKeypoint.RIGHT_EAR, 0.9),
+    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.LEFT_EAR, 1.2),
+    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.RIGHT_EAR, 1.2),
+    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.LEFT_EYE, 2.6),
+    FaceSpan(COCOKeypoint.NOSE, COCOKeypoint.RIGHT_EYE, 2.6),
+    FaceSpan(COCOKeypoint.LEFT_EYE, COCOKeypoint.LEFT_EAR, 1.8),
+    FaceSpan(COCOKeypoint.RIGHT_EYE, COCOKeypoint.RIGHT_EAR, 1.8),
+)
+
+# Used only when a single face landmark is visible, so no face span can be measured.
+SHOULDER_SPAN = FaceSpan(COCOKeypoint.LEFT_SHOULDER, COCOKeypoint.RIGHT_SHOULDER, 0.35)
+
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
@@ -131,6 +171,10 @@ class Keypoint:
     x: float
     y: float
     confidence: float
+
+    @property
+    def is_visible(self) -> bool:
+        return self.confidence >= VISIBILITY_THRESHOLD
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,8 +7,8 @@ from evidone_pose_detection.camera import Camera
 from evidone_pose_detection.cli import parse_config
 from evidone_pose_detection.errors import CameraOpenError, PoseModelError
 from evidone_pose_detection.models import AppConfig
-from evidone_pose_detection.pose import PoseEstimator
-from evidone_pose_detection.window import VideoWindow
+from evidone_pose_detection.ui import VideoWindow
+from evidone_pose_detection.vision.pose import PoseEstimator
 
 logger = logging.getLogger(__name__)
 

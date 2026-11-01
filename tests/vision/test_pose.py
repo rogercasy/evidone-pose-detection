@@ -4,10 +4,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-from evidone_pose_detection import pose as pose_module
 from evidone_pose_detection.errors import PoseModelError, UnexpectedKeypointCountError
 from evidone_pose_detection.models import KEYPOINT_COUNT, COCOKeypoint, Frame, PoseConfig
-from evidone_pose_detection.pose import PoseEstimator
+from evidone_pose_detection.vision import pose as pose_module
+from evidone_pose_detection.vision.pose import PoseEstimator
 
 WEIGHTS = "yolo26n-pose.pt"
 CONFIDENCE = 0.4

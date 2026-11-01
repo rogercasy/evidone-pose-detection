@@ -13,8 +13,6 @@ from evidone_pose_detection.models import (
     PersonPose,
 )
 
-VISIBILITY_THRESHOLD = 0.5
-
 REGION_COLOURS: Mapping[BodyRegion, tuple[int, int, int]] = MappingProxyType(
     {
         BodyRegion.HEAD: (0, 195, 255),
@@ -38,7 +36,7 @@ def _draw_bones(frame: Frame, person: PersonPose) -> None:
     for bone in SKELETON:
         start = person.keypoint(bone.start)
         end = person.keypoint(bone.end)
-        if _is_visible(start) and _is_visible(end):
+        if start.is_visible and end.is_visible:
             cv2.line(
                 frame,
                 _point(start),
@@ -51,7 +49,7 @@ def _draw_bones(frame: Frame, person: PersonPose) -> None:
 
 def _draw_joints(frame: Frame, person: PersonPose) -> None:
     for name, keypoint in zip(COCOKeypoint, person.keypoints, strict=True):
-        if _is_visible(keypoint):
+        if keypoint.is_visible:
             cv2.circle(
                 frame,
                 _point(keypoint),
@@ -60,10 +58,6 @@ def _draw_joints(frame: Frame, person: PersonPose) -> None:
                 cv2.FILLED,
                 cv2.LINE_AA,
             )
-
-
-def _is_visible(keypoint: Keypoint) -> bool:
-    return keypoint.confidence >= VISIBILITY_THRESHOLD
 
 
 def _point(keypoint: Keypoint) -> tuple[int, int]:

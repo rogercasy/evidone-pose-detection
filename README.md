@@ -47,6 +47,35 @@ uv run evidone
 
 _The smallest example that shows the main thing it does._
 
+## Module layout
+
+```text
+src/evidone_pose_detection/
+├── main.py          # entry point: CLI -> Qt app -> camera lifetime
+├── cli.py           # argument parsing into AppConfig
+├── camera.py        # cv2.VideoCapture wrapper; releases the device on the way out
+├── models.py        # shared dataclasses, COCO keypoints, skeleton and face landmark data
+├── errors.py        # error types
+├── vision/          # everything that reads or paints a frame
+│   ├── pose.py          # the only module that imports torch / ultralytics
+│   ├── faces.py         # face regions worked out from pose keypoints alone
+│   ├── anonymization.py # blurs those regions
+│   └── rendering.py     # draws the COCO-17 skeleton
+└── ui/
+    └── window.py    # Qt window; drives the per-frame loop
+```
+
+Each frame runs `estimate → blur → draw`, so the skeleton stays sharp on top of a hidden face.
+
+`vision/__init__.py` re-exports `blur_faces`, `draw_poses` and `face_region` — but deliberately
+not `PoseEstimator`. That class is the single door to torch/ultralytics (~0.9 s to import), so it
+is reached at `evidone_pose_detection.vision.pose` and importing `vision` or `ui` loads no ML
+stack at all.
+
+`tests/` mirrors this tree (`vision/faces.py` → `tests/vision/test_faces.py`), and
+`tests/test_architecture.py` enforces both rules: that only `vision/pose.py` names the ML
+packages, and that importing `ui` or `vision` really does not pull them in.
+
 ## Development
 
 Setup, QA, docs and releases: [DEVELOPMENT.md](DEVELOPMENT.md).

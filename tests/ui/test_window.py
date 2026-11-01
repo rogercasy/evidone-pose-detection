@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
@@ -7,8 +7,9 @@ from PySide6.QtWidgets import QApplication
 
 from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture, FakePoseSource, make_person
 from evidone_pose_detection.camera import Camera
-from evidone_pose_detection.models import CameraConfig
-from evidone_pose_detection.window import MINIMUM_YIELD_MS, WINDOW_TITLE, VideoWindow
+from evidone_pose_detection.models import CameraConfig, Frame, PersonPose
+from evidone_pose_detection.ui.window import MINIMUM_YIELD_MS, WINDOW_TITLE, VideoWindow
+from evidone_pose_detection.vision.rendering import REGION_COLOURS
 
 InstallCapture = Callable[[FakeCapture], list[int]]
 
@@ -87,7 +88,7 @@ def test_a_frame_slower_than_the_capture_rate_still_yields_to_the_event_loop(
 ) -> None:
     window.start()
     clock = iter([0.0, 10.0])
-    monkeypatch.setattr("evidone_pose_detection.window.time.perf_counter", lambda: next(clock))
+    monkeypatch.setattr("evidone_pose_detection.ui.window.time.perf_counter", lambda: next(clock))
 
     window._show_next_frame()
 
@@ -180,3 +181,51 @@ def test_the_model_never_sees_a_frame_we_have_drawn_on(
 
     assert poses.last_frame is not None
     assert (poses.last_frame == 128).all()
+
+
+def test_faces_are_hidden_before_the_skeleton_is_drawn(
+    application: QApplication,
+    working_capture: FakeCapture,
+    install_capture: InstallCapture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_capture(working_capture)
+    order: list[str] = []
+
+    class RecordingPoses(FakePoseSource):
+        def estimate(self, frame: Frame) -> tuple[PersonPose, ...]:
+            order.append("estimate")
+            return super().estimate(frame)
+
+    def record_blur(frame: Frame, people: Sequence[PersonPose]) -> Frame:
+        order.append("blur")
+        return frame
+
+    def record_draw(frame: Frame, people: Sequence[PersonPose]) -> Frame:
+        order.append("draw")
+        return frame
+
+    monkeypatch.setattr("evidone_pose_detection.ui.window.blur_faces", record_blur)
+    monkeypatch.setattr("evidone_pose_detection.ui.window.draw_poses", record_draw)
+    window = VideoWindow(
+        Camera(CameraConfig(device_index=0)).__enter__(), RecordingPoses((make_person(0.8),))
+    )
+
+    window._show_next_frame()
+
+    assert order == ["estimate", "blur", "draw"]
+
+
+def test_the_skeleton_stays_sharp_on_top_of_a_blurred_face(
+    application: QApplication, working_capture: FakeCapture, install_capture: InstallCapture
+) -> None:
+    install_capture(working_capture)
+    poses = FakePoseSource((make_person(0.8),))
+    window = VideoWindow(Camera(CameraConfig(device_index=0)).__enter__(), poses)
+
+    window._show_next_frame()
+
+    shown = working_capture.delivered[-1]
+    drawn_colours = {tuple(int(c) for c in colour) for colour in REGION_COLOURS.values()}
+    painted = {tuple(int(c) for c in pixel) for row in shown for pixel in row}
+    assert drawn_colours & painted, "no un-smeared skeleton colour survived the blur"
