@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from evidone_pose_detection.models import CameraConfig, Frame, HideStyle, Person
 from evidone_pose_detection.ui.window import (
     CAMERA_LABEL,
     HIDING_LABEL,
+    LOG_ERROR_TITLE,
+    LOG_LABEL,
     MINIMUM_YIELD_MS,
     RECORD_LABEL,
     RECORDING_ERROR_TITLE,
@@ -780,3 +783,175 @@ def test_a_recording_that_cannot_be_written_stops_and_is_reported(
     assert window._recorder.is_recording is False
     assert not window._record_action.isChecked()
     assert window._timer.isActive() or not window._running, "the frame loop died"
+
+
+# --- logging what the model saw ---------------------------------------------------------
+
+
+@pytest.fixture
+def logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(
+        "evidone_pose_detection.ui.window._detection_log_path", lambda: tmp_path / "run.jsonl"
+    )
+    return tmp_path / "run.jsonl"
+
+
+def test_logging_is_off_until_it_is_switched_on(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    assert window._detection_log.is_logging is False
+    assert not window._log_action.isChecked()
+    assert window._log_action.text() == LOG_LABEL
+
+
+def test_switching_logging_on_opens_a_jsonl_file(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    window._log_action.setChecked(True)
+
+    assert window._detection_log.is_logging is True
+    assert window._detection_log.destination == logs
+    assert logs.exists()
+
+
+def test_switching_logging_off_closes_the_file(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    window = window_over([running(frame)], install_captures)
+    window._log_action.setChecked(True)
+    window._show_next_frame()
+
+    window._log_action.setChecked(False)
+
+    assert window._detection_log.is_logging is False
+    assert not window._log_action.isChecked()
+    assert len(logs.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_nothing_is_logged_while_logging_is_off(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    for _ in range(3):
+        window._show_next_frame()
+
+    assert not logs.exists()
+
+
+def test_one_line_is_written_per_shown_frame(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    install_captures([FakeCapture(frames=[frame] * 6, opened=True, fps=25.0)])
+    window = VideoWindow(
+        Camera(CameraConfig(source=0)).__enter__(), FakePoseSource((make_person(0.8),))
+    )
+    window._log_action.setChecked(True)
+
+    for _ in range(3):
+        window._show_next_frame()
+    window.shutdown()
+
+    records = [json.loads(line) for line in logs.read_text(encoding="utf-8").splitlines()]
+    assert [record["frame"] for record in records] == [0, 1, 2]
+    assert all(len(record["people"]) == 1 for record in records)
+
+
+def test_the_log_holds_what_the_model_produced(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    install_captures([FakeCapture(frames=[frame] * 4, opened=True, fps=25.0)])
+    window = VideoWindow(
+        Camera(CameraConfig(source=0)).__enter__(), FakePoseSource((make_person(0.8),))
+    )
+    window._log_action.setChecked(True)
+
+    window._show_next_frame()
+    window.shutdown()
+
+    (record,) = [json.loads(line) for line in logs.read_text(encoding="utf-8").splitlines()]
+    (logged,) = record["people"]
+    assert logged["score"] == pytest.approx(0.8)
+    assert len(logged["keypoints"]) == 17
+
+
+def test_closing_the_window_closes_the_log(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    window = window_over([running(frame)], install_captures)
+    window._log_action.setChecked(True)
+    window._show_next_frame()
+
+    window.close()
+
+    assert window._detection_log.is_logging is False
+
+
+def test_shutdown_closes_the_log(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, logs: Path
+) -> None:
+    window = window_over([running(frame)], install_captures)
+    window._log_action.setChecked(True)
+    window._show_next_frame()
+
+    window.shutdown()
+
+    assert window._detection_log.is_logging is False
+
+
+def test_a_log_that_cannot_be_opened_is_reported_and_stays_off(
+    application: QApplication,
+    frame: Frame,
+    install_captures: InstallCaptures,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "evidone_pose_detection.ui.window._detection_log_path",
+        lambda: tmp_path / "no-such-folder" / "run.jsonl",
+    )
+    window = window_over([running(frame)], install_captures)
+    reported: list[str] = []
+    window._report = lambda title, error: reported.append(title)  # type: ignore[method-assign]
+
+    window._log_action.setChecked(True)
+
+    assert reported == [LOG_ERROR_TITLE]
+    assert window._detection_log.is_logging is False
+    assert not window._log_action.isChecked()
+
+
+def test_recording_and_logging_count_frames_together(
+    application: QApplication,
+    frame: Frame,
+    install_captures: InstallCaptures,
+    logs: Path,
+    recordings: Path,
+) -> None:
+    install_captures([FakeCapture(frames=[frame] * 8, opened=True, fps=25.0)])
+    window = VideoWindow(
+        Camera(CameraConfig(source=0)).__enter__(), FakePoseSource((make_person(0.8),))
+    )
+    recorded: list[int] = []
+    original_write = window._recorder.write
+
+    def count_frame(frame: Frame) -> None:
+        recorded.append(1)
+        original_write(frame)
+
+    window._recorder.write = count_frame  # type: ignore[method-assign]
+    window._record_action.setChecked(True)
+    window._log_action.setChecked(True)
+
+    for _ in range(4):
+        window._show_next_frame()
+    window.shutdown()
+
+    logged = [json.loads(line) for line in logs.read_text(encoding="utf-8").splitlines()]
+    assert len(logged) == len(recorded) == 4, "the log and the recording do not line up"
+    assert [record["frame"] for record in logged] == [0, 1, 2, 3]
+    assert (recordings / "clip.mp4").stat().st_size > 0

@@ -224,3 +224,4 @@ __marimo__/
 
 # Recordings are produced at runtime, never committed.
 *.mp4
+*.jsonl

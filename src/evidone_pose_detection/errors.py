@@ -36,6 +36,15 @@ class RecordingError(EvidoneError):
         self.destination = destination
 
 
+class DetectionLogError(EvidoneError):
+    def __init__(self, destination: Path) -> None:
+        super().__init__(
+            f"could not log detections to '{destination}': "
+            "the folder may not exist, or it may not be writable"
+        )
+        self.destination = destination
+
+
 class UnexpectedKeypointCountError(EvidoneError):
     def __init__(self, count: int, expected: int) -> None:
         super().__init__(f"the model returned {count} keypoints per person, expected {expected}")
