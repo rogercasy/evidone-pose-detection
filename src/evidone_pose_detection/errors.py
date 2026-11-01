@@ -27,6 +27,15 @@ class PoseModelError(EvidoneError):
         self.weights = weights
 
 
+class RecordingError(EvidoneError):
+    def __init__(self, destination: Path) -> None:
+        super().__init__(
+            f"could not record to '{destination}': "
+            "the folder may not exist, or the codec may be unavailable"
+        )
+        self.destination = destination
+
+
 class UnexpectedKeypointCountError(EvidoneError):
     def __init__(self, count: int, expected: int) -> None:
         super().__init__(f"the model returned {count} keypoints per person, expected {expected}")

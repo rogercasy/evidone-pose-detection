@@ -37,9 +37,12 @@ def main() -> int:
 def run(camera: Camera, poses: PoseSource) -> int:
     application = QApplication([])
     window = VideoWindow(camera, poses)
-    window.show()
-    window.start()
-    return application.exec()
+    try:
+        window.show()
+        window.start()
+        return application.exec()
+    finally:
+        window.shutdown()
 
 
 def _abort(error: EvidoneError, code: int) -> int:
