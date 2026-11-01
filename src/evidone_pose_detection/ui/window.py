@@ -1,6 +1,8 @@
 import logging
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QActionGroup, QCloseEvent, QImage, QKeyEvent, QPixmap
@@ -19,12 +21,13 @@ from evidone_pose_detection.camera import Camera, CaptureSession
 from evidone_pose_detection.errors import CameraOpenError
 from evidone_pose_detection.models import (
     DEFAULT_CAMERA_INDEX,
-    DEFAULT_HIDE_STYLE,
     CameraConfig,
     Frame,
     FrameStats,
+    HideStyle,
     PersonPose,
     PoseSource,
+    ViewSettings,
 )
 from evidone_pose_detection.ui.framerate import FrameRate
 from evidone_pose_detection.vision import (
@@ -49,6 +52,12 @@ SETTINGS_LABEL = "Settings"
 SOURCE_LABEL = "Source"
 CAMERA_LABEL = "Camera"
 VIDEO_LABEL = "Video File\u2026"
+HIDING_LABEL = "Face Hiding"
+SKELETON_LABEL = "Skeleton Overlay"
+
+STYLE_LABELS: Mapping[HideStyle, str] = MappingProxyType(
+    {HideStyle.BLUR: "Blur", HideStyle.PIXELATE: "Pixelate", HideStyle.FILL: "Solid Fill"}
+)
 FILE_DIALOG_TITLE = "Choose a video file"
 VIDEO_FILE_FILTER = "Video files (*.mp4 *.avi *.mov *.mkv *.webm);;All files (*)"
 SOURCE_ERROR_TITLE = "Cannot open that source"
@@ -66,7 +75,7 @@ class VideoWindow(QMainWindow):
         self._frame_rate = FrameRate(FRAME_RATE_WINDOW)
         self._camera_index = _starting_camera_index(camera.config)
         self._tracker = FaceTracker(hold_frames=DEFAULT_HOLD_FRAMES)
-        self._hide_style = DEFAULT_HIDE_STYLE
+        self._settings = ViewSettings.defaults()
         self._replays = camera.replays
         self._view = _build_view()
         self._interval_ms = properties.frame_interval_ms
@@ -79,6 +88,7 @@ class VideoWindow(QMainWindow):
         self.setCentralWidget(self._view)
         self._build_toolbar()
         self._mark_active_source()
+        self._mark_active_view()
         self.resize(properties.width, properties.height)
 
     def start(self) -> None:
@@ -108,8 +118,11 @@ class VideoWindow(QMainWindow):
         self._forget_tracks_across_a_replay()
         result = self._poses.estimate(frame)
         self._show_people(result.people)
-        hide_faces(frame, self._tracker.track(face_regions(result.people)), self._hide_style)
-        draw_poses(frame, result.people)
+        hide_faces(
+            frame, self._tracker.track(face_regions(result.people)), self._settings.hide_style
+        )
+        if self._settings.draw_skeleton:
+            draw_poses(frame, result.people)
         draw_stats(
             frame,
             FrameStats(
@@ -176,6 +189,22 @@ class VideoWindow(QMainWindow):
     def _report_source_error(self, error: CameraOpenError) -> None:
         QMessageBox.warning(self, SOURCE_ERROR_TITLE, str(error))
 
+    def _style_chooser(self, style: HideStyle) -> Callable[[], None]:
+        def choose() -> None:
+            self._settings.hide_style = style
+            self._mark_active_view()
+
+        return choose
+
+    def _toggle_skeleton(self, drawn: bool) -> None:
+        self._settings.draw_skeleton = drawn
+        self._mark_active_view()
+
+    def _mark_active_view(self) -> None:
+        for style, action in self._style_actions.items():
+            action.setChecked(style is self._settings.hide_style)
+        self._skeleton_action.setChecked(self._settings.draw_skeleton)
+
     def _mark_active_source(self) -> None:
         config = self._session.camera.config
         self._camera_action.setChecked(not config.is_file)
@@ -207,7 +236,25 @@ class VideoWindow(QMainWindow):
             group.addAction(action)
         self._camera_action.triggered.connect(self._choose_camera)
         self._video_action.triggered.connect(self._choose_video_file)
+
+        self._build_hiding_menu(menu)
+        menu.addSeparator()
+        self._skeleton_action = menu.addAction(SKELETON_LABEL)
+        self._skeleton_action.setCheckable(True)
+        self._skeleton_action.toggled.connect(self._toggle_skeleton)
         return menu
+
+    def _build_hiding_menu(self, menu: QMenu) -> None:
+        self._hiding_menu = menu.addMenu(HIDING_LABEL)
+        styles = QActionGroup(self)
+        styles.setExclusive(True)
+        self._style_actions = {}
+        for style in HideStyle:
+            action = self._hiding_menu.addAction(STYLE_LABELS[style])
+            action.setCheckable(True)
+            styles.addAction(action)
+            action.triggered.connect(self._style_chooser(style))
+            self._style_actions[style] = action
 
     def _show_people(self, people: tuple[PersonPose, ...]) -> None:
         if len(people) != len(self._people):

@@ -47,6 +47,7 @@ class HideStyle(StrEnum):
 
 
 DEFAULT_HIDE_STYLE = HideStyle.BLUR
+DEFAULT_DRAW_SKELETON = True
 
 
 class BodyRegion(StrEnum):
@@ -164,6 +165,16 @@ class PoseConfig:
 class AppConfig:
     camera: CameraConfig
     pose: PoseConfig
+
+
+@dataclass(slots=True)
+class ViewSettings:
+    hide_style: HideStyle
+    draw_skeleton: bool
+
+    @classmethod
+    def defaults(cls) -> "ViewSettings":
+        return cls(hide_style=DEFAULT_HIDE_STYLE, draw_skeleton=DEFAULT_DRAW_SKELETON)
 
 
 @dataclass(frozen=True, slots=True)

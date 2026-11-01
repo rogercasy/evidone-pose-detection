@@ -8,12 +8,15 @@ from PySide6.QtWidgets import QApplication, QToolBar, QToolButton
 
 from conftest import FRAME_HEIGHT, FRAME_WIDTH, FakeCapture, FakePoseSource, make_person
 from evidone_pose_detection.camera import Camera
-from evidone_pose_detection.models import CameraConfig, Frame, PersonPose, PoseResult
+from evidone_pose_detection.models import CameraConfig, Frame, HideStyle, PersonPose, PoseResult
 from evidone_pose_detection.ui.window import (
     CAMERA_LABEL,
+    HIDING_LABEL,
     MINIMUM_YIELD_MS,
     SETTINGS_LABEL,
+    SKELETON_LABEL,
     SOURCE_LABEL,
+    STYLE_LABELS,
     VIDEO_LABEL,
     WINDOW_TITLE,
     VideoWindow,
@@ -454,3 +457,159 @@ def test_frames_that_are_not_replays_keep_the_tracks(
         window._show_next_frame()
 
     assert forgotten == []
+
+
+# --- choosing how faces are hidden, and whether the skeleton is drawn --------------------
+
+
+def recording_window(
+    frame: Frame, install: InstallCaptures, monkeypatch: pytest.MonkeyPatch
+) -> tuple[VideoWindow, list[HideStyle], list[int]]:
+    """A window whose pipeline records the style used and the skeletons drawn."""
+    install([FakeCapture(frames=[frame] * 12, opened=True, fps=25.0)])
+    styles: list[HideStyle] = []
+    skeletons: list[int] = []
+
+    def record_hide(target: Frame, regions: Sequence[object], style: HideStyle) -> Frame:
+        styles.append(style)
+        return target
+
+    def record_draw(target: Frame, people: Sequence[object]) -> Frame:
+        skeletons.append(len(people))
+        return target
+
+    monkeypatch.setattr("evidone_pose_detection.ui.window.hide_faces", record_hide)
+    monkeypatch.setattr("evidone_pose_detection.ui.window.draw_poses", record_draw)
+    window = VideoWindow(
+        Camera(CameraConfig(source=0)).__enter__(), FakePoseSource((make_person(0.8),))
+    )
+    return window, styles, skeletons
+
+
+def test_every_style_has_a_label_for_the_menu() -> None:
+    assert set(STYLE_LABELS) == set(HideStyle)
+
+
+def test_the_menu_offers_every_style(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    assert window._hiding_menu.title() == HIDING_LABEL
+    labels = [action.text() for action in window._hiding_menu.actions()]
+    assert labels == [STYLE_LABELS[style] for style in HideStyle]
+
+
+def test_the_app_starts_on_blur_and_says_so(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    assert window._settings.hide_style is HideStyle.BLUR
+    assert window._style_actions[HideStyle.BLUR].isChecked()
+    assert not window._style_actions[HideStyle.PIXELATE].isChecked()
+    assert not window._style_actions[HideStyle.FILL].isChecked()
+
+
+@pytest.mark.parametrize("style", list(HideStyle), ids=str)
+def test_choosing_a_style_is_recorded_and_marked(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures, style: HideStyle
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    window._style_actions[style].trigger()
+
+    assert window._settings.hide_style is style
+    checked = [name for name, action in window._style_actions.items() if action.isChecked()]
+    assert checked == [style], "the choice should be exclusive"
+
+
+@pytest.mark.parametrize("style", list(HideStyle), ids=str)
+def test_the_chosen_style_reaches_the_very_next_frame(
+    application: QApplication,
+    frame: Frame,
+    install_captures: InstallCaptures,
+    monkeypatch: pytest.MonkeyPatch,
+    style: HideStyle,
+) -> None:
+    window, styles, _ = recording_window(frame, install_captures, monkeypatch)
+    window._show_next_frame()
+
+    window._style_actions[style].trigger()
+    window._show_next_frame()
+
+    assert styles[0] is HideStyle.BLUR
+    assert styles[1] is style
+
+
+def test_changing_the_style_does_not_disturb_the_running_source(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    capture = running(frame)
+    window = window_over([capture], install_captures)
+    camera = window._session.camera
+    tracker = window._tracker
+
+    window._style_actions[HideStyle.FILL].trigger()
+
+    assert window._session.camera is camera, "the source was rebuilt"
+    assert window._tracker is tracker, "the tracker was rebuilt"
+    assert capture.released == 0
+
+
+def test_the_skeleton_starts_switched_on(
+    application: QApplication, frame: Frame, install_captures: InstallCaptures
+) -> None:
+    window = window_over([running(frame)], install_captures)
+
+    assert window._settings.draw_skeleton is True
+    assert window._skeleton_action.isChecked()
+    assert window._skeleton_action.text() == SKELETON_LABEL
+
+
+def test_switching_the_skeleton_off_stops_it_being_drawn(
+    application: QApplication,
+    frame: Frame,
+    install_captures: InstallCaptures,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window, _, skeletons = recording_window(frame, install_captures, monkeypatch)
+    window._show_next_frame()
+
+    window._skeleton_action.setChecked(False)
+    window._show_next_frame()
+
+    assert len(skeletons) == 1, "the skeleton was drawn after being switched off"
+    assert window._settings.draw_skeleton is False
+
+
+def test_switching_the_skeleton_back_on_draws_it_again(
+    application: QApplication,
+    frame: Frame,
+    install_captures: InstallCaptures,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window, _, skeletons = recording_window(frame, install_captures, monkeypatch)
+    window._skeleton_action.setChecked(False)
+    window._show_next_frame()
+
+    window._skeleton_action.setChecked(True)
+    window._show_next_frame()
+
+    assert skeletons == [1]
+    assert window._skeleton_action.isChecked()
+
+
+def test_hiding_keeps_running_while_the_skeleton_is_off(
+    application: QApplication,
+    frame: Frame,
+    install_captures: InstallCaptures,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window, styles, skeletons = recording_window(frame, install_captures, monkeypatch)
+
+    window._skeleton_action.setChecked(False)
+    window._show_next_frame()
+
+    assert skeletons == []
+    assert styles == [HideStyle.BLUR], "faces stopped being hidden with the overlay"

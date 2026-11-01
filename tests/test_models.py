@@ -1,10 +1,14 @@
 import pytest
 
 from evidone_pose_detection.models import (
+    DEFAULT_DRAW_SKELETON,
+    DEFAULT_HIDE_STYLE,
     KEYPOINT_REGIONS,
     SKELETON,
     CaptureProperties,
     COCOKeypoint,
+    HideStyle,
+    ViewSettings,
 )
 
 
@@ -56,3 +60,31 @@ def test_no_bone_is_listed_twice() -> None:
 @pytest.mark.parametrize("name", list(COCOKeypoint))
 def test_every_keypoint_belongs_to_a_region(name: COCOKeypoint) -> None:
     assert name in KEYPOINT_REGIONS
+
+
+def test_the_app_starts_on_blur_with_the_skeleton_drawn() -> None:
+    settings = ViewSettings.defaults()
+
+    assert settings.hide_style is HideStyle.BLUR
+    assert settings.hide_style is DEFAULT_HIDE_STYLE
+    assert settings.draw_skeleton is DEFAULT_DRAW_SKELETON is True
+
+
+def test_settings_are_edited_in_place_so_a_reader_sees_the_change() -> None:
+    settings = ViewSettings.defaults()
+    seen_by_the_loop = settings
+
+    settings.hide_style = HideStyle.FILL
+    settings.draw_skeleton = False
+
+    assert seen_by_the_loop.hide_style is HideStyle.FILL
+    assert seen_by_the_loop.draw_skeleton is False
+
+
+def test_each_set_of_defaults_is_independent() -> None:
+    first = ViewSettings.defaults()
+    second = ViewSettings.defaults()
+
+    first.hide_style = HideStyle.PIXELATE
+
+    assert second.hide_style is HideStyle.BLUR
