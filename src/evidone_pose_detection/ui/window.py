@@ -26,7 +26,13 @@ from evidone_pose_detection.models import (
     PoseSource,
 )
 from evidone_pose_detection.ui.framerate import FrameRate
-from evidone_pose_detection.vision import blur_faces, draw_poses, draw_stats
+from evidone_pose_detection.vision import (
+    FaceTracker,
+    blur_faces,
+    draw_poses,
+    draw_stats,
+    face_regions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +63,7 @@ class VideoWindow(QMainWindow):
         self._people: tuple[PersonPose, ...] = ()
         self._frame_rate = FrameRate(FRAME_RATE_WINDOW)
         self._camera_index = _starting_camera_index(camera.config)
+        self._tracker = FaceTracker()
         self._view = _build_view()
         self._interval_ms = properties.frame_interval_ms
         self._running = False
@@ -96,7 +103,7 @@ class VideoWindow(QMainWindow):
 
         result = self._poses.estimate(frame)
         self._show_people(result.people)
-        blur_faces(frame, result.people)
+        blur_faces(frame, self._tracker.track(face_regions(result.people)))
         draw_poses(frame, result.people)
         draw_stats(
             frame,
@@ -146,6 +153,7 @@ class VideoWindow(QMainWindow):
         if isinstance(config.source, int):
             self._camera_index = config.source
         self._interval_ms = camera.properties().frame_interval_ms
+        self._tracker.reset()
         self._mark_active_source()
         logger.info("Switched the source to %s", config.source)
 
