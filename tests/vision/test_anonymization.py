@@ -7,14 +7,19 @@ from evidone_pose_detection.models import (
     BoundingBox,
     COCOKeypoint,
     Frame,
+    HideStyle,
     Keypoint,
     PersonPose,
 )
-from evidone_pose_detection.vision.anonymization import blur_faces
+from evidone_pose_detection.vision.anonymization import STYLES, hide_faces
 from evidone_pose_detection.vision.faces import face_regions
+from evidone_pose_detection.vision.styles import FILL_COLOUR
 
 WIDTH = 400
 HEIGHT = 400
+
+# The suite below pins behaviour shared by every style; STYLE is the one it runs with.
+STYLE = HideStyle.BLUR
 SEEN = 0.9
 UNSEEN = VISIBILITY_THRESHOLD - 0.01
 
@@ -74,7 +79,7 @@ def test_the_face_is_unrecognisable_whatever_size_it_is(half_width: float) -> No
     reach = round(half_width / 2)
     before = detail_at(frame, 200, 200, reach)
 
-    blur_faces(frame, face_regions([person]))
+    hide_faces(frame, face_regions([person]), STYLE)
 
     assert detail_at(frame, 200, 200, reach) < before * 0.1
 
@@ -85,7 +90,7 @@ def test_a_large_face_loses_as_much_detail_as_a_small_one() -> None:
         frame = checkerboard(cell=max(1, round(half_width / 4)))
         reach = round(half_width / 2)
         before = detail_at(frame, 200, 200, reach)
-        blur_faces(frame, face_regions([face_at(200.0, 200.0, half_width)]))
+        hide_faces(frame, face_regions([face_at(200.0, 200.0, half_width)]), STYLE)
         residues.append(detail_at(frame, 200, 200, reach) / before)
 
     small, large = residues
@@ -96,7 +101,7 @@ def test_pixels_well_outside_the_region_are_untouched() -> None:
     frame = checkerboard(cell=8)
     original = frame.copy()
 
-    blur_faces(frame, face_regions([face_at(120.0, 120.0, 30.0)]))
+    hide_faces(frame, face_regions([face_at(120.0, 120.0, 30.0)]), STYLE)
 
     assert (frame[350:, 350:] == original[350:, 350:]).all()
 
@@ -120,7 +125,7 @@ def test_a_region_crossing_the_frame_edge_is_clipped_not_fatal(
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, face_regions([face_at(centre_x, centre_y, 60.0)]))
+    hide_faces(frame, face_regions([face_at(centre_x, centre_y, 60.0)]), STYLE)
 
     assert frame.shape == original.shape
     assert (frame != original).any()
@@ -130,7 +135,7 @@ def test_a_region_entirely_off_frame_changes_nothing() -> None:
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, face_regions([face_at(-500.0, -500.0, 40.0)]))
+    hide_faces(frame, face_regions([face_at(-500.0, -500.0, 40.0)]), STYLE)
 
     assert (frame == original).all()
 
@@ -139,7 +144,7 @@ def test_a_person_without_a_visible_face_is_left_alone() -> None:
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, face_regions([faceless_person()]))
+    hide_faces(frame, face_regions([faceless_person()]), STYLE)
 
     assert (frame == original).all()
 
@@ -148,7 +153,7 @@ def test_a_frame_without_people_is_left_alone() -> None:
     frame = checkerboard(cell=6)
     original = frame.copy()
 
-    blur_faces(frame, face_regions([]))
+    hide_faces(frame, face_regions([]), STYLE)
 
     assert (frame == original).all()
 
@@ -158,7 +163,7 @@ def test_every_face_in_the_frame_is_hidden() -> None:
     people = [face_at(100.0, 100.0, 40.0), face_at(300.0, 300.0, 40.0)]
     before = [detail_at(frame, 100, 100, 20), detail_at(frame, 300, 300, 20)]
 
-    blur_faces(frame, face_regions(people))
+    hide_faces(frame, face_regions(people), STYLE)
 
     assert detail_at(frame, 100, 100, 20) < before[0] * 0.1
     assert detail_at(frame, 300, 300, 20) < before[1] * 0.1
@@ -167,6 +172,113 @@ def test_every_face_in_the_frame_is_hidden() -> None:
 def test_blurring_mutates_the_frame_it_was_given_and_hands_it_back() -> None:
     frame = checkerboard(cell=8)
 
-    hidden = blur_faces(frame, face_regions([face_at(200.0, 200.0, 40.0)]))
+    hidden = hide_faces(frame, face_regions([face_at(200.0, 200.0, 40.0)]), STYLE)
 
     assert hidden is frame
+
+
+# --- every style, on its own terms ------------------------------------------------------
+
+ALL_STYLES = list(HideStyle)
+FACE_CENTRE = (200, 200)
+FACE_HALF_WIDTH = 60.0
+OUTSIDE = (slice(0, 40), slice(0, 40))
+
+
+def hidden_frame(style: HideStyle, cell: int) -> tuple[Frame, Frame]:
+    frame = checkerboard(cell=cell)
+    original = frame.copy()
+    hide_faces(frame, face_regions([face_at(200.0, 200.0, FACE_HALF_WIDTH)]), style)
+    return frame, original
+
+
+def test_every_style_has_an_entry_and_nothing_is_missing() -> None:
+    assert set(STYLES) == set(HideStyle)
+    assert len(STYLES) == len(ALL_STYLES)
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+def test_every_style_changes_the_region(style: HideStyle) -> None:
+    frame, original = hidden_frame(style, cell=8)
+
+    centre = frame[FACE_CENTRE[1], FACE_CENTRE[0]]
+    assert (frame != original).any(), "the style left the frame untouched"
+    assert (centre != original[FACE_CENTRE[1], FACE_CENTRE[0]]).any()
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+def test_every_style_leaves_the_rest_of_the_frame_alone(style: HideStyle) -> None:
+    frame, original = hidden_frame(style, cell=8)
+
+    assert (frame[OUTSIDE] == original[OUTSIDE]).all(), "a far corner was touched"
+    assert (frame[360:, 360:] == original[360:, 360:]).all()
+    changed_rows = np.any(frame != original, axis=(1, 2)).nonzero()[0]
+    assert changed_rows.min() >= 200 - FACE_HALF_WIDTH * 3
+    assert changed_rows.max() <= 200 + FACE_HALF_WIDTH * 3
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+def test_every_style_makes_the_face_unrecognisable(style: HideStyle) -> None:
+    frame = checkerboard(cell=8)
+    before = detail_at(frame, 200, 200, 30)
+
+    hide_faces(frame, face_regions([face_at(200.0, 200.0, FACE_HALF_WIDTH)]), style)
+
+    assert detail_at(frame, 200, 200, 30) < before * 0.3
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+@pytest.mark.parametrize("half_width", [12.0, 40.0, 120.0])
+def test_every_style_holds_up_at_any_face_size(style: HideStyle, half_width: float) -> None:
+    frame = checkerboard(cell=max(1, round(half_width / 4)))
+    reach = round(half_width / 2)
+    before = detail_at(frame, 200, 200, reach)
+
+    hide_faces(frame, face_regions([face_at(200.0, 200.0, half_width)]), style)
+
+    assert detail_at(frame, 200, 200, reach) < before * 0.25
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+@pytest.mark.parametrize(
+    ("centre_x", "centre_y"), [(0.0, 200.0), (float(WIDTH), 200.0), (200.0, 0.0), (-20.0, -20.0)]
+)
+def test_every_style_clips_at_the_frame_edge(
+    style: HideStyle, centre_x: float, centre_y: float
+) -> None:
+    frame = checkerboard(cell=6)
+    original = frame.copy()
+
+    hide_faces(frame, face_regions([face_at(centre_x, centre_y, 60.0)]), style)
+
+    assert frame.shape == original.shape
+    assert (frame != original).any()
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+def test_every_style_ignores_a_region_entirely_off_frame(style: HideStyle) -> None:
+    frame = checkerboard(cell=6)
+    original = frame.copy()
+
+    hide_faces(frame, face_regions([face_at(-900.0, -900.0, 40.0)]), style)
+
+    assert (frame == original).all()
+
+
+@pytest.mark.parametrize("style", ALL_STYLES, ids=str)
+def test_every_style_is_given_nothing_and_does_nothing(style: HideStyle) -> None:
+    frame = checkerboard(cell=6)
+    original = frame.copy()
+
+    hide_faces(frame, [], style)
+
+    assert (frame == original).all()
+
+
+def test_a_solid_fill_leaves_one_colour_behind() -> None:
+    frame = checkerboard(cell=8)
+
+    hide_faces(frame, face_regions([face_at(200.0, 200.0, FACE_HALF_WIDTH)]), HideStyle.FILL)
+
+    assert tuple(int(channel) for channel in frame[200, 200]) == FILL_COLOUR
+    assert detail_at(frame, 200, 200, 20) == pytest.approx(0.0)

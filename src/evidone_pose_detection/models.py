@@ -40,6 +40,16 @@ KEYPOINT_COUNT = len(COCOKeypoint)
 VISIBILITY_THRESHOLD = 0.5
 
 
+class HideStyle(StrEnum):
+    BLUR = "blur"
+    PIXELATE = "pixelate"
+    FILL = "fill"
+
+
+DEFAULT_HIDE_STYLE = HideStyle.BLUR
+DEFAULT_DRAW_SKELETON = True
+
+
 class BodyRegion(StrEnum):
     HEAD = "head"
     TORSO = "torso"
@@ -155,6 +165,16 @@ class PoseConfig:
 class AppConfig:
     camera: CameraConfig
     pose: PoseConfig
+
+
+@dataclass(slots=True)
+class ViewSettings:
+    hide_style: HideStyle
+    draw_skeleton: bool
+
+    @classmethod
+    def defaults(cls) -> "ViewSettings":
+        return cls(hide_style=DEFAULT_HIDE_STYLE, draw_skeleton=DEFAULT_DRAW_SKELETON)
 
 
 @dataclass(frozen=True, slots=True)

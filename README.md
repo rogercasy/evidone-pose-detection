@@ -59,7 +59,9 @@ src/evidone_pose_detection/
 ├── vision/          # everything that reads or paints a frame
 │   ├── pose.py          # the only module that imports torch / ultralytics
 │   ├── faces.py         # face regions worked out from pose keypoints alone
-│   ├── anonymization.py # blurs those regions
+│   ├── tracking.py      # matches regions across frames, smooths and holds them
+│   ├── anonymization.py # where and how much to conceal: clipping, masking, dispatch
+│   ├── styles.py        # what concealment looks like: blur, pixelate, solid fill
 │   └── rendering.py     # draws the COCO-17 skeleton
 └── ui/
     └── window.py    # Qt window; drives the per-frame loop
